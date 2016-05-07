@@ -167,7 +167,7 @@
 			"cc2.8xlarge" : { "Arch" : "HVM64"  }
 		},
 		"AWSRegionArch2AMI": {
-			"us-east-1"      : {"PV64" : "ami-22111148", "HVM64" : "ami-08111162"},
+			"us-east-1"      : {"PV64" : "ami-8ff710e2", "HVM64" : "ami-f5f41398"},
 			"us-west-1"      : {"PV64" : "ami-0e087a6e", "HVM64" : "ami-1b0f7d7b"},
 			"us-west-2"      : {"PV64" : "ami-792bc219", "HVM64" : "ami-c229c0a2"},
 			"eu-west-1"      : {"PV64" : "ami-a5368cd6", "HVM64" : "ami-31328842"},
