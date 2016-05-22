@@ -18,7 +18,7 @@ if [ -n "$cfnSignalURL" ]; then
 		done
 		[ "$CHAIN_SIZE" == 0 -a -z "$ERROR_CHAIN" ] && ERROR_CHAIN="line $LINENO" ||:
 		curl -X PUT -H 'Content-Type:' \
-			--data-binary '{\"Status\":\"FAILURE\",\"Reason\":\"Bootstrap FAILED at '"$ERROR_CHAIN"'\",\"UniqueId\":\"Log\",\"Data\":\"Failure\"}' '$cfnSignalURL'; \
+			--data-binary '{\"Status\":\"FAILURE\",\"Reason\":\"Bootstrap FAILED at '"$ERROR_CHAIN"'\",\"UniqueId\":\"Log\",\"Data\":\"Failure\"}' "$cfnSignalURL"; \
 		exit $RC
 	}
 
