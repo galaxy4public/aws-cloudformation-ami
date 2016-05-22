@@ -530,7 +530,7 @@
 							},
 							{
 								"Fn::Join": [ "", [
-									"curl -qsS4f --retry 180 --retry-delay 1 'https://raw.githubusercontent.com/galaxy4public/aws-cloudformation-ami/master/bootstrap/bootstrap.sh' -o /root/bootstrap.sh\n"
+									"curl -qsS4f --retry 180 --retry-delay 1 'https://raw.githubusercontent.com/galaxy4public/aws-cloudformation-ami/development/bootstrap/bootstrap.sh' -o /root/bootstrap.sh\n"
 								] ]
 							}
 						]
