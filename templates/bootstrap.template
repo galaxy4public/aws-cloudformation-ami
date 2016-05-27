@@ -392,7 +392,7 @@
 						},
 						{
 							"Fn::If": [
-								"useParentStackId",
+								"useVpcId",
 								{
 									"Resource": [ "*" ],
 									"Action": [
@@ -406,7 +406,7 @@
 						},
 						{
 							"Fn::If": [
-								"useParentStackId",
+								"useVpcId",
 								{
 									"Resource": { "Fn::Join": [ "", [ "arn:aws:ec2:", { "Ref": "AWS::Region" }, ":", { "Ref": "AWS::AccountId" }, ":security-group/*" ] ] },
 									"Action": [
