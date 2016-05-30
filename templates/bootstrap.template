@@ -37,7 +37,8 @@
 		},
 		"VpcId": {
 			"Type": "String",
-			"Description": "VPC where the bootstrap instance will be launched.  If you do not specify this parameter you need to ensure that the default security group allows outbound traffic on tcp/80 and tcp/443"
+			"Description": "VPC where the bootstrap instance will be launched.  If you do not specify this parameter you need to ensure that the default security group allows outbound traffic on tcp/80 and tcp/443",
+			"Default": ""
 		},
 		"SubnetId": {
 			"Type": "AWS::EC2::Subnet::Id",
@@ -358,7 +359,10 @@
 											":*" 
 										] ]
 									},
-									"Action": [ "sns:ListTopics" ],
+									"Action": [
+										"sns:ListTopics",
+										"sns:GetTopicAttributes"
+									],
 									"Effect": "Allow"
 								},
 								{ "Ref": "AWS::NoValue" }
