@@ -177,7 +177,7 @@
 			"ap-northeast-2" : {"PV64" : "", "HVM64" : "ami-2b408b45"},
 			"ap-southeast-1" : {"PV64" : "ami-df9e4cbc", "HVM64" : "ami-a59b49c6"},
 			"ap-southeast-2" : {"PV64" : "ami-63351d00", "HVM64" : "ami-dc361ebf"},
-			"sa-south-1"     : {"PV64" : "", "HVM64" : "ami-ffbdd790"}
+			"sa-south-1"     : {"PV64" : "", "HVM64" : "ami-ffbdd790"},
 			"sa-east-1"      : {"PV64" : "ami-1ad34676", "HVM64" : "ami-6dd04501"}
 		},
 		"AWSRegionSupport": {
