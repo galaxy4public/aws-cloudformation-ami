@@ -299,14 +299,14 @@
 								{
 									"Fn::If": [
 										"useLambda",
-										{ "Fn::Join": [ "", [ "arn:aws:iam::", { "Ref": "AWS::AccountId" }, ":role/", { "Ref": "AWS::StackName" }, "-LambdaExecutionRole-*" ] ] },
+										{ "Fn::Join": [ "", [ "arn:aws:iam::", { "Ref": "AWS::AccountId" }, ":role/", { "Ref": "AWS::StackName" }, "-LER-*" ] ] },
 										{ "Ref": "AWS::NoValue" }
 									]
 								},
 								{
 									"Fn::If": [
 										"useLambda",
-										{ "Fn::Join": [ "", [ "arn:aws:iam::", { "Ref": "AWS::AccountId" }, ":policy/", { "Ref": "AWS::StackName" }, "-LambdaExecutionRolePolicy" ] ] },
+										{ "Fn::Join": [ "", [ "arn:aws:iam::", { "Ref": "AWS::AccountId" }, ":policy/", { "Ref": "AWS::StackName" }, "-LERP" ] ] },
 										{ "Ref": "AWS::NoValue" }
 									]
 								}
@@ -569,7 +569,7 @@
 				"Timeout": "4800"
 			}
 		},
-		"LambdaExecutionRole": {
+		"LER": {
 			"Condition": "useLambda",
 			"Type": "AWS::IAM::Role",
 			"Properties": {
@@ -586,7 +586,7 @@
 				"Path": "/",
 				"Policies": [
 				{
-					"PolicyName": { "Fn::Join": [ "", [ { "Ref": "AWS::StackName" }, "-LambdaExecutionRolePolicy" ] ] },
+					"PolicyName": { "Fn::Join": [ "", [ { "Ref": "AWS::StackName" }, "-LERP" ] ] },
 					"PolicyDocument": {
 						"Version": "2012-10-17",
 						"Statement": [
@@ -632,7 +632,7 @@
 				"Handler": "index.handler",
 				"Runtime": "nodejs",
 				"Timeout": "30",
-				"Role": { "Fn::GetAtt" : ["LambdaExecutionRole", "Arn"] }
+				"Role": { "Fn::GetAtt" : ["LER", "Arn"] }
 			}
 		},
 		"AmiLambda": {

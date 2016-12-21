@@ -1185,7 +1185,7 @@ fi
 # XXX: another minefield is here.  We reported that the resource was
 #      successfully created, but if the parent stack fails for any
 #      reason it will trigger the deletion of our stack.  If we are
-#      running an a region where Lambda is not available this will
+#      running in a region where Lambda is not available this will
 #      result in a deadlock due to the cyclic dependency between the
 #      bootstrap image and SQS/SNS for custom resource
 
