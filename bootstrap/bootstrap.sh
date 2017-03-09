@@ -170,9 +170,15 @@ SCRIPT_CHECKSUM=$(sha256sum "${BASH_SOURCE[0]}" | cut -f1 -d' ')
 IMAGE_CHECKSUM=$(chroot "$BOOTSTRAP_MNT" /bin/sh -c "rpm -qa | LC_ALL=C sort | sha256sum | cut -f1 -d' '")
 DISTRO_RELEASE=$(chroot "$BOOTSTRAP_MNT" /bin/sh -c "rpm -q centos-release | sed -n 's,^centos-release-\([[:digit:].-]\+\)\.el.*,\1,;T;s,-,.,;p'")
 
-# If custom user data was provided add its hash to the image checksum
+# Compatibility with the previous versions
 if [ -s /root/bootstrap-addon.sh ]; then
-	IMAGE_CHECKSUM="$IMAGE_CHECKSUM:$(cat /root/bootstrap-addon.sh | sha256sum | cut -f1 -d' ')"
+	mkdir -p -m700 /root/bootstrap.d
+	mv /root/bootstrap-addon.sh /root/bootstrap.d/
+fi
+
+# If custom user data was provided add its hash to the image checksum
+if [ -d /root/bootstrap.d ]; then
+	IMAGE_CHECKSUM="$IMAGE_CHECKSUM:$(tar cf - --sort=name -C /root/bootstrap.d . | sha256sum | cut -f1 -d' ')"
 fi
 
 AMI_ID=$(aws ec2 describe-images --output json \
@@ -328,6 +334,7 @@ for module in \
 	parport:false \
 	parport_pc:false \
 	pata_acpi:false \
+	serio_raw:false \
 	snd:true \
 	snd_pcm:true \
 	snd_pcsp:true \
@@ -335,6 +342,7 @@ for module in \
 	soundcore:true \
 	ttm:true \
 	usbcore:false \
+	usbserial:false \
 ; do
 	cat <<-__EOF__ >> "$BOOTSTRAP_MNT"/etc/modprobe.d/blacklist.conf
 		blacklist ${module%%:*}
@@ -351,16 +359,30 @@ chroot "$BOOTSTRAP_MNT" grub2-install "$TARGET_VOL"
 chroot "$BOOTSTRAP_MNT" grub2-mkconfig -o /boot/grub2/grub.cfg
 rm -f "$BOOTSTRAP_MNT"/boot/initramfs-*.img
 chroot "$BOOTSTRAP_MNT" /bin/sh -ec '\
+	export LANG=C LC_ALL=C ;
 	INITRAMFS=$(rpm -ql kernel | grep ^/boot/initramfs- | sort -nr | head -1); \
 	KVERS=$(printf "$INITRAMFS" | sed -n "s,^/boot/initramfs-\(.*\)\.img,\1,;T;p"); \
 	[ -n "$INITRAMFS" -a -n "$KVERS" ] && \
-	dracut --force --verbose --no-hostonly --show-modules --printsize "$INITRAMFS" "$KVERS" \
+	dracut --strip --prelink --hardlink --ro-mnt --stdlog 3 --no-hostonly --drivers "xen-blkfront ext4 mbcache jbd2" --force --verbose --show-modules --printsize "$INITRAMFS" "$KVERS" \
 '
 chroot "$BOOTSTRAP_MNT" systemctl mask proc-sys-fs-binfmt_misc.{auto,}mount
 
 # Setup a custom root user
 mkdir -m0 "$BOOTSTRAP_MNT"/root/.users
 chroot "$BOOTSTRAP_MNT" useradd -om -u 0 -g 0 -s /bin/bash -d /root/.users/admin r_admin
+
+# Ensure that only SELinux confined user are allowed to login via SSH
+chroot "$BOOTSTRAP_MNT" printf '%user_u\n' >> /etc/security/sepermit.conf
+
+# Be a bit more stricter re: the permissions we do not know about
+chroot "$BOOTSTRAP_MNT" printf 'handle-unknown=deny\n' >> /etc/selinux/semanage.conf
+
+# Ensure that we have sane i18n environment unless explicitly changed
+mkdir -m755 "$BOOTSTRAP_MNT/etc/systemd/system.conf.d"
+cat > "$BOOTSTRAP_MNT"/etc/systemd/system.conf.d/locale.conf << "__EOF__"
+DefaultEnvironment=LC_ALL=C LANG=C
+__EOF__
+chmod 0644 "$BOOTSTRAP_MNT"/etc/systemd/system.conf.d/locale.conf
 
 # cleanup service (this is to be launched on the initial bootstrap of the instance)
 cat > "$BOOTSTRAP_MNT"/root/cleanup.sh << "__EOF__"
@@ -375,6 +397,7 @@ setsebool -NP \
 	deny_execmem=1 \
 	selinuxuser_execmod=0 \
 	selinuxuser_execstack=0 \
+	secure_mode_policyload=1 \
 #
 
 semanage login -a -s root -r 's0-s0:c0.c1023' %root
@@ -815,9 +838,10 @@ rm "$BOOTSTRAP_MNT"/root/policies/initd2user.mod
 chroot "$BOOTSTRAP_MNT" semodule -N -i /root/policies/initd2user.pp
 
 # Inject custom code into the process if it was provided
-if [ -s /root/bootstrap-addon.sh ]; then
-	. /root/bootstrap-addon.sh
-fi
+for f in /root/bootstrap.d/*.sh ; do
+	[ "$f" != '/root/bootstrap.d/*.sh' ] || break
+	. "$f"
+done
 
 cd /root
 umount -R "$BOOTSTRAP_MNT"
