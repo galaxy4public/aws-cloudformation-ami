@@ -177,8 +177,8 @@ if [ -s /root/bootstrap-addon.sh ]; then
 fi
 
 # If custom user data was provided add its hash to the image checksum
-if [ -d /root/bootstrap.d ]; then
-	IMAGE_CHECKSUM="$IMAGE_CHECKSUM:$(tar cf - --sort=name -C /root/bootstrap.d . | sha256sum | cut -f1 -d' ')"
+if [ "$(echo /root/bootstrap.d/*)" != '/root/bootstrap.d/*']; then
+	IMAGE_CHECKSUM="$IMAGE_CHECKSUM:$(tar cf - -C /root/bootstrap.d $(ls -1a /root/bootstrap.d/* | sed 's,^/root/bootstrap.d/,,' | LC_ALL=C sort) | sha256sum | cut -f1 -d' ')"
 fi
 
 AMI_ID=$(aws ec2 describe-images --output json \
