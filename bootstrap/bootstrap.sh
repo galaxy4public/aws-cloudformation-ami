@@ -1011,6 +1011,12 @@ aws ec2 delete-snapshot --output json --snapshot-id "$SNAPSHOT_ID"
 # We postponed the handling of the possible error condition encountered
 # in the wait cycle so we do not need to introduce additional cleanup
 if [ "$OUTPUT" != 'stopped' ]; then
+
+	# Try to preserve the console output of the temporary instance
+	aws ec2 get-console-output --output text \
+		--instance-id "$INSTANCE_ID" \
+		&> /root/temp-ec2-console.txt ||:
+
 	# Terminate the newly created instance since we do not want to leave it behind
 	if ! OUTPUT=$(aws ec2 terminate-instances --output json \
 				--instance-ids "$INSTANCE_ID" \
