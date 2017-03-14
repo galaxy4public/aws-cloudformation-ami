@@ -262,8 +262,10 @@ fi
 # dive in and generate it
 if [ -z "$AMI_ID" -o "${AMI_ID:0:4}" != 'ami-' ]; then
 
+DEVICE_ID=
+[ -n "$FS_UUID" ] && DEVICE_ID="UUID=\"$FS_UUID\"" ||:
 cat > "$BOOTSTRAP_MNT"/etc/fstab << __EOF__
-${FS_UUID:+UUID=$FS_UUID}${FS_UUID:-/dev/xvda1}	/		ext4		noatime,nodev			0 1
+${DEVICE_ID:-/dev/xvda1}	/		ext4		noatime,nodev			0 1
 devtmpfs	/dev		devtmpfs	nosuid,noexec,size=16k,nr_inodes=1000	0 0
 tmpfs		/dev/shm	tmpfs		nosuid,noexec,nodev		0 0
 devpts		/dev/pts	devpts		nosuid,noexec,gid=5,mode=620	0 0
@@ -273,6 +275,8 @@ tmpfs		/tmp		tmpfs		nosuid,noexec,nodev		0 0
 /tmp		/var/tmp	none		bind				0 0
 __EOF__
 chmod 0644 "$BOOTSTRAP_MNT"/etc/fstab
+unset DEVICE_ID
+unset FS_UUID
 
 cat > "$BOOTSTRAP_MNT"/etc/sysconfig/network << "__EOF__"
 NETWORKING=yes
