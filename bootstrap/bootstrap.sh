@@ -311,7 +311,7 @@ chmod 0644 "$BOOTSTRAP_MNT"/etc/sysconfig/network-scripts/ifcfg-eth0
 
 # grub configuration
 cat > "$BOOTSTRAP_MNT"/etc/default/grub << "__EOF__"
-GRUB_CMDLINE_LINUX="crashkernel=auto console=tty0 console=ttyS0 net.ifnames=0 biosdevname=0 ipv6.disable=1 modprobe.blacklist=pcspkr,i2c_piix4 nousb audit=1 quiet"
+GRUB_CMDLINE_LINUX="crashkernel=auto console=tty0 console=ttyS0 net.ifnames=0 biosdevname=0 ipv6.disable=1 modprobe.blacklist=pcspkr,i2c_piix4 nousb audit=1 quiet systemd.log_level=debug "
 GRUB_TIMEOUT=30
 __EOF__
 chmod 0600 "$BOOTSTRAP_MNT"/etc/default/grub
@@ -403,11 +403,11 @@ chroot "$BOOTSTRAP_MNT" /bin/sh -ec "\
 "
 
 # Ensure that we have sane i18n environment unless explicitly changed
-mkdir -m755 "$BOOTSTRAP_MNT/etc/systemd/system.conf.d"
-cat > "$BOOTSTRAP_MNT"/etc/systemd/system.conf.d/locale.conf << "__EOF__"
-DefaultEnvironment=LC_ALL=C LANG=C
+cat > "$BOOTSTRAP_MNT"/etc/locale.conf << "__EOF__"
+LANG=C
+LC_MESSAGES=C
 __EOF__
-chmod 0644 "$BOOTSTRAP_MNT"/etc/systemd/system.conf.d/locale.conf
+chmod 0644 "$BOOTSTRAP_MNT"/etc/locale.conf
 
 # cleanup service (this is to be launched on the initial bootstrap of the instance)
 cat > "$BOOTSTRAP_MNT"/root/cleanup.sh << "__EOF__"
@@ -873,10 +873,10 @@ if [ -z "$VOLUME_ID" -o -n "${VOLUME_ID//[[:alnum:]-]}" ]; then
 	exit 1
 fi
 
-# XXX: dangerous section -- if we get terminated beyond we will most
+# XXX: dangerous section -- if we get terminated beyond this we will most
 #      likely leave untracked artifacts behind when the stack is removed
 #      This must be addressed (probably with registering callbacks in a
-#      handler) as part of the upcoming modularisation of this scrip.
+#      handler) as part of the upcoming modularisation of this script.
 
 # Snapshot the volume
 SNAPSHOT_ID=$(aws ec2 create-snapshot --output json \
