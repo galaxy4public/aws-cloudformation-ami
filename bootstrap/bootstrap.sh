@@ -55,8 +55,15 @@ until [ -e "${TARGET_VOL}1" ]; do
 	I=$((I + 1))
 done
 
-mkfs -F -t ext4 -E lazy_itable_init=0,lazy_journal_init=0 -L / -M / -q \
+mkfs -F -t ext4 -E lazy_itable_init=0,lazy_journal_init=0 -M / -q \
 	"${TARGET_VOL}1"
+
+# We are using tune2fs and sed here so we do not introduce additional
+# dependencies on blkid and grep for no particular reason
+FS_UUID=$(tune2fs -l "${TARGET_VOL}1" \
+	| sed -n 's,^\s*Filesystem\s\+UUID:\s*\([a-f0-9-]\+\),\1,;T;p' \
+	| tail -1 \
+)
 
 mkdir -p -m0 "$BOOTSTRAP_MNT"
 mount "${TARGET_VOL}1" "$BOOTSTRAP_MNT"
@@ -255,8 +262,8 @@ fi
 # dive in and generate it
 if [ -z "$AMI_ID" -o "${AMI_ID:0:4}" != 'ami-' ]; then
 
-cat > "$BOOTSTRAP_MNT"/etc/fstab << "__EOF__"
-LABEL=/		/		ext4		noatime,nodev			0 1
+cat > "$BOOTSTRAP_MNT"/etc/fstab << __EOF__
+${FS_UUID:+UUID=$FS_UUID}${FS_UUID:-/dev/xvda1}	/		ext4		noatime,nodev			0 1
 devtmpfs	/dev		devtmpfs	nosuid,noexec,size=16k,nr_inodes=1000	0 0
 tmpfs		/dev/shm	tmpfs		nosuid,noexec,nodev		0 0
 devpts		/dev/pts	devpts		nosuid,noexec,gid=5,mode=620	0 0
@@ -377,6 +384,24 @@ chroot "$BOOTSTRAP_MNT" printf '%user_u\n' >> /etc/security/sepermit.conf
 # Be a bit more stricter re: the permissions we do not know about
 chroot "$BOOTSTRAP_MNT" printf 'handle-unknown=deny\n' >> /etc/selinux/semanage.conf
 
+# Configure SELinux policy
+chroot "$BOOTSTRAP_MNT" /bin/sh -ec "\
+	export LANG=C LC_ALL=C ;
+	semanage fcontext -a -e /tmp-inst /tmp/.private -N ;
+	semanage fcontext -a -e /var/tmp-inst /var/tmp/.private -N ;
+	semanage fcontext -a -f a -t ssh_home_t '/root/.users/[^/].+/\.ssh(/.*)?' -N ;
+	setsebool -NP \
+		polyinstantiation_enabled=1 \
+		deny_execmem=1 \
+		selinuxuser_execmod=0 \
+		selinuxuser_execstack=0 \
+		secure_mode_policyload=1 \
+	;
+	semanage login -a -s root -r 's0-s0:c0.c1023' %root -N ;
+	semanage login -m -s user_u -r s0 __default__ -N ;
+	semanage login -a -s user_u -r s0 root -N
+"
+
 # Ensure that we have sane i18n environment unless explicitly changed
 mkdir -m755 "$BOOTSTRAP_MNT/etc/systemd/system.conf.d"
 cat > "$BOOTSTRAP_MNT"/etc/systemd/system.conf.d/locale.conf << "__EOF__"
@@ -388,21 +413,6 @@ chmod 0644 "$BOOTSTRAP_MNT"/etc/systemd/system.conf.d/locale.conf
 cat > "$BOOTSTRAP_MNT"/root/cleanup.sh << "__EOF__"
 #!/bin/bash
 set -uxe -o pipefail
-
-semanage fcontext -a -e /tmp-inst /tmp/.private
-semanage fcontext -a -e /var/tmp-inst /var/tmp/.private
-semanage fcontext -a -f a -t ssh_home_t '/root/.users/[^/].+/\.ssh(/.*)?'
-setsebool -NP \
-	polyinstantiation_enabled=1 \
-	deny_execmem=1 \
-	selinuxuser_execmod=0 \
-	selinuxuser_execstack=0 \
-	secure_mode_policyload=1 \
-#
-
-semanage login -a -s root -r 's0-s0:c0.c1023' %root
-semanage login -m -s user_u -r s0 __default__
-semanage login -a -s user_u -r s0 root
 
 mkdir /var/log/journal
 chown -h root:systemd-journal /var/log/journal
