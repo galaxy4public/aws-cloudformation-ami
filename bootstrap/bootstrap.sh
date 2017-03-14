@@ -387,16 +387,16 @@ chroot "$BOOTSTRAP_MNT" printf 'handle-unknown=deny\n' >> /etc/selinux/semanage.
 # Configure SELinux policy
 chroot "$BOOTSTRAP_MNT" /bin/sh -ec "\
 	export LANG=C LC_ALL=C ;
-	semanage fcontext -a -e /tmp-inst /tmp/.private -N ;
-	semanage fcontext -a -e /var/tmp-inst /var/tmp/.private -N ;
-	semanage fcontext -a -f a -t ssh_home_t '/root/.users/[^/].+/\.ssh(/.*)?' -N ;
-	setsebool -NP \
-		polyinstantiation_enabled=1 \
-		deny_execmem=1 \
-		selinuxuser_execmod=0 \
-		selinuxuser_execstack=0 \
-		secure_mode_policyload=1 \
-	;
+	semanage fcontext -N -a -e /tmp-inst /tmp/.private ;
+	semanage fcontext -N -a -e /var/tmp-inst /var/tmp/.private ;
+	semanage fcontext -N -a -f a -t ssh_home_t '/root/.users/[^/].+/\.ssh(/.*)?' ;
+
+	semanage boolean -N --modify --on  polyinstantiation_enabled ;
+	semanage boolean -N --modify --on  deny_execmem ;
+	semanage boolean -N --modify --off selinuxuser_execmod ;
+	semanage boolean -N --modify --off selinuxuser_execstack ;
+	semanage boolean -N --modify --on  secure_mode_policyload ;
+
 	semanage login -a -s root -r 's0-s0:c0.c1023' %root -N ;
 	semanage login -m -s user_u -r s0 __default__ -N ;
 	semanage login -a -s user_u -r s0 root -N
