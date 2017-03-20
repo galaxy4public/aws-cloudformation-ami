@@ -738,53 +738,53 @@ chmod 0700 "$BOOTSTRAP_MNT"/usr/local/sbin/apply-etc-patches.sh
 
 mkdir -m700 "$BOOTSTRAP_MNT"/etc/patches
 cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/patches/bashrc.diff
---- etc/bashrc.centos	2015-08-12 14:21:52.000000000 +0000
-+++ etc/bashrc	2016-04-03 11:27:23.806000000 +0000
+--- etc/bashrc.centos	2016-11-05 17:19:35.000000000 +0000
++++ etc/bashrc	2017-03-20 02:59:33.608000000 +0000
 @@ -68,9 +68,9 @@
      # You could check uidgid reservation validity in
      # /usr/share/doc/setup-*/uidgid file
-     if [ $UID -gt 199 ] && [ "`id -gn`" = "`id -un`" ]; then
+     if [ $UID -gt 199 ] && [ "`/usr/bin/id -gn`" = "`/usr/bin/id -un`" ]; then
 -       umask 002
 -    else
         umask 022
 +    else
 +       umask 077
      fi
-
+ 
      SHELL=/bin/bash
 __EOF__
 
 cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/patches/csh.cshrc.diff
---- etc/csh.cshrc.centos	2013-06-07 14:31:32.000000000 +0000
-+++ etc/csh.cshrc	2016-04-03 11:31:15.295000000 +0000
+--- etc/csh.cshrc.centos	2016-11-05 17:19:35.000000000 +0000
++++ etc/csh.cshrc	2017-03-20 03:00:28.804000000 +0000
 @@ -8,9 +8,9 @@
  # You could check uidgid reservation validity in
  # /usr/share/doc/setup-*/uidgid file
- if ($uid > 199 && "`id -gn`" == "`id -un`") then
+ if ($uid > 199 && "`/usr/bin/id -gn`" == "`/usr/bin/id -un`") then
 -    umask 002
 -else
      umask 022
 +else
 +    umask 077
  endif
-
+ 
  if ($?prompt) then
 __EOF__
 
 cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/patches/profile.diff
---- etc/profile.centos	2013-06-07 14:31:32.000000000 +0000
-+++ etc/profile	2016-04-03 11:33:00.200000000 +0000
+--- etc/profile.centos	2016-11-05 17:19:35.000000000 +0000
++++ etc/profile	2017-03-20 03:01:31.243000000 +0000
 @@ -57,9 +57,9 @@
  # You could check uidgid reservation validity in
  # /usr/share/doc/setup-*/uidgid file
- if [ $UID -gt 199 ] && [ "`id -gn`" = "`id -un`" ]; then
+ if [ $UID -gt 199 ] && [ "`/usr/bin/id -gn`" = "`/usr/bin/id -un`" ]; then
 -    umask 002
 -else
      umask 022
 +else
 +    umask 077
  fi
-
+ 
  for i in /etc/profile.d/*.sh ; do
 __EOF__
 
