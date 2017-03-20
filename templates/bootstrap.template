@@ -218,6 +218,7 @@
 							"Action": [
 								"cloudformation:DescribeStacks",
 								"ec2:DescribeInstances",
+								"ec2:GetConsoleOutput",
 								"ec2:DescribeVolumes",
 								"ec2:CreateSnapshot",
 								"ec2:DeleteSnapshot",
