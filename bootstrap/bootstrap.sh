@@ -417,6 +417,9 @@ cat > "$BOOTSTRAP_MNT"/root/cleanup.sh << "__EOF__"
 #!/bin/bash
 set -uxe -o pipefail
 
+# Fix for https://bugzilla.redhat.com/show_bug.cgi?id=1406439
+chcon -vh -t bin_t /sbin
+
 mkdir /var/log/journal
 chown -h root:systemd-journal /var/log/journal
 chmod 02755 /var/log/journal
