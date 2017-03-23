@@ -12,19 +12,23 @@
 			"Type": "String",
 			"Default": "t2.micro",
 			"AllowedValues": [
-				"t1.micro", "t2.micro", "t2.small", "t2.medium",
-				"m1.small", "m1.medium", "m1.large", "m1.xlarge",
-				"m2.xlarge", "m2.2xlarge", "m2.4xlarge",
-				"m3.medium", "m3.large", "m3.xlarge", "m3.2xlarge",
 				"c1.medium", "c1.xlarge",
 				"c3.large", "c3.xlarge", "c3.2xlarge", "c3.4xlarge", "c3.8xlarge",
 				"c4.large", "c4.xlarge", "c4.2xlarge", "c4.4xlarge", "c4.8xlarge",
-				"g2.2xlarge",
-				"r3.large", "r3.xlarge", "r3.2xlarge", "r3.4xlarge", "r3.8xlarge",
+				"d2.large", "d2.xlarge", "d2.2xlarge", "d2.4xlarge", "d2.8xlarge",
+				"g2.2xlarge", "g2.8xlarge",
+				"hs1.8xlarge",
 				"i2.xlarge", "i2.2xlarge", "i2.4xlarge", "i2.8xlarge",
-				"d2.xlarge", "d2.2xlarge", "d2.4xlarge", "d2.8xlarge",
-				"hi1.4xlarge", "hs1.8xlarge",
-				"cr1.8xlarge", "cc2.8xlarge"
+				"i3.xlarge", "i3.2xlarge", "i3.4xlarge", "i3.8xlarge", "i3.16xlarge",
+				"m1.small", "m1.large", "m1.medium", "m1.xlarge",
+				"m2.xlarge", "m2.2xlarge", "m2.4xlarge",
+				"m3.large", "m3.medium", "m3.xlarge", "m3.2xlarge",
+				"m4.large", "m4.xlarge", "m4.2xlarge", "m4.4xlarge", "m4.10xlarge", "m4.16xlarge",
+				"r3.large", "r3.xlarge", "r3.2xlarge", "r3.4xlarge", "r3.8xlarge",
+				"r4.large", "r4.xlarge", "r4.2xlarge", "r4.4xlarge", "r4.8xlarge", "r4.16xlarge",
+				"t1.micro",
+				"t2.nano", "t2.micro", "t2.small", "t2.medium", "t2.large", "t2.xlarge", "t2.2xlarge",
+				"x1.16xlarge", "x1.32xlarge"
 			],
 			"ConstraintDescription": "must be a supported instance type, if not sure go with the default"
 		},
@@ -122,9 +126,13 @@
 	"Mappings": {
 		"AWSInstanceType2Arch": {
 			"t1.micro"    : { "Arch" : "PV64"   },
+			"t2.nano"     : { "Arch" : "HVM64"  },
 			"t2.micro"    : { "Arch" : "HVM64"  },
 			"t2.small"    : { "Arch" : "HVM64"  },
 			"t2.medium"   : { "Arch" : "HVM64"  },
+			"t2.large"    : { "Arch" : "HVM64"  },
+			"t2.xlarge"   : { "Arch" : "HVM64"  },
+			"t2.2xlarge"  : { "Arch" : "HVM64"  },
 			"m1.small"    : { "Arch" : "PV64"   },
 			"m1.medium"   : { "Arch" : "PV64"   },
 			"m1.large"    : { "Arch" : "PV64"   },
@@ -136,6 +144,12 @@
 			"m3.large"    : { "Arch" : "HVM64"  },
 			"m3.xlarge"   : { "Arch" : "HVM64"  },
 			"m3.2xlarge"  : { "Arch" : "HVM64"  },
+			"m4.large"    : { "Arch" : "HVM64"  },
+			"m4.xlarge"   : { "Arch" : "HVM64"  },
+			"m4.2xlarge"  : { "Arch" : "HVM64"  },
+			"m4.4xlarge"  : { "Arch" : "HVM64"  },
+			"m4.10xlarge" : { "Arch" : "HVM64"  },
+			"m4.16xlarge" : { "Arch" : "HVM64"  },
 			"c1.medium"   : { "Arch" : "PV64"   },
 			"c1.xlarge"   : { "Arch" : "PV64"   },
 			"c3.large"    : { "Arch" : "HVM64"  },
@@ -149,46 +163,64 @@
 			"c4.4xlarge"  : { "Arch" : "HVM64"  },
 			"c4.8xlarge"  : { "Arch" : "HVM64"  },
 			"g2.2xlarge"  : { "Arch" : "HVMG2"  },
+			"g2.8xlarge"  : { "Arch" : "HVMG2"  },
 			"r3.large"    : { "Arch" : "HVM64"  },
 			"r3.xlarge"   : { "Arch" : "HVM64"  },
 			"r3.2xlarge"  : { "Arch" : "HVM64"  },
 			"r3.4xlarge"  : { "Arch" : "HVM64"  },
 			"r3.8xlarge"  : { "Arch" : "HVM64"  },
-			"i2.xlarge"   : { "Arch" : "HVM64"  },
-			"i2.2xlarge"  : { "Arch" : "HVM64"  },
-			"i2.4xlarge"  : { "Arch" : "HVM64"  },
-			"i2.8xlarge"  : { "Arch" : "HVM64"  },
+			"r4.large"    : { "Arch" : "HVM64"  },
+			"r4.xlarge"   : { "Arch" : "HVM64"  },
+			"r4.2xlarge"  : { "Arch" : "HVM64"  },
+			"r4.4xlarge"  : { "Arch" : "HVM64"  },
+			"r4.8xlarge"  : { "Arch" : "HVM64"  },
+			"r4.16xlarge" : { "Arch" : "HVM64"  },
+			"x1.16xlarge" : { "Arch" : "HVM64"  },
+			"x1.32xlarge" : { "Arch" : "HVM64"  },
+			"d2.large"    : { "Arch" : "HVM64"  },
 			"d2.xlarge"   : { "Arch" : "HVM64"  },
 			"d2.2xlarge"  : { "Arch" : "HVM64"  },
 			"d2.4xlarge"  : { "Arch" : "HVM64"  },
 			"d2.8xlarge"  : { "Arch" : "HVM64"  },
-			"hi1.4xlarge" : { "Arch" : "HVM64"  },
-			"hs1.8xlarge" : { "Arch" : "HVM64"  },
-			"cr1.8xlarge" : { "Arch" : "HVM64"  },
-			"cc2.8xlarge" : { "Arch" : "HVM64"  }
+			"i2.xlarge"   : { "Arch" : "HVM64"  },
+			"i2.2xlarge"  : { "Arch" : "HVM64"  },
+			"i2.4xlarge"  : { "Arch" : "HVM64"  },
+			"i2.8xlarge"  : { "Arch" : "HVM64"  },
+			"i3.xlarge"   : { "Arch" : "HVM64"  },
+			"i3.2xlarge"  : { "Arch" : "HVM64"  },
+			"i3.4xlarge"  : { "Arch" : "HVM64"  },
+			"i3.8xlarge"  : { "Arch" : "HVM64"  },
+			"i3.16xlarge" : { "Arch" : "HVM64"  },
+			"hs1.8xlarge" : { "Arch" : "PV64"  }
 		},
 		"AWSRegionArch2AMI": {
-			"us-east-1"      : {"PV64" : "ami-2a69aa47", "HVM64" : "ami-6869aa05"},
-			"us-west-1"      : {"PV64" : "ami-a2490dc2", "HVM64" : "ami-31490d51"},
-			"us-west-2"      : {"PV64" : "ami-7f77b31f", "HVM64" : "ami-7172b611"},
-			"eu-west-1"      : {"PV64" : "ami-4cdd453f", "HVM64" : "ami-f9dd458a"},
-			"eu-central-1"   : {"PV64" : "ami-6527cf0a", "HVM64" : "ami-ea26ce85"},
-			"ap-northeast-1" : {"PV64" : "ami-3e42b65f", "HVM64" : "ami-374db956"},
-			"ap-northeast-2" : {"PV64" : "", "HVM64" : "ami-2b408b45"},
-			"ap-southeast-1" : {"PV64" : "ami-df9e4cbc", "HVM64" : "ami-a59b49c6"},
-			"ap-southeast-2" : {"PV64" : "ami-63351d00", "HVM64" : "ami-dc361ebf"},
-			"sa-south-1"     : {"PV64" : "", "HVM64" : "ami-ffbdd790"},
-			"sa-east-1"      : {"PV64" : "ami-1ad34676", "HVM64" : "ami-6dd04501"}
+			"us-east-1"      : {"PV64" : "ami-7a3dd76c", "HVM64" : "ami-0b33d91d"},
+			"us-east-2"      : {"PV64" : "", "HVM64" : "ami-c55673a0"},
+			"us-west-1"      : {"PV64" : "ami-f25a0892", "HVM64" : "ami-165a0876"},
+			"us-west-2"      : {"PV64" : "ami-8a72cdea", "HVM64" : "ami-f173cc91"},
+			"ca-central-1"   : {"PV64" : "", "HVM64" : "ami-ebed508f"},
+			"eu-west-1"      : {"PV64" : "ami-e0f2af86", "HVM64" : "ami-70edb016"},
+			"eu-west-2"      : {"PV64" : "", "HVM64" : "ami-f1949e95"},
+			"eu-central-1"   : {"PV64" : "ami-3b0fc054", "HVM64" : "ami-af0fc0c0"},
+			"ap-northeast-1" : {"PV64" : "ami-bdd2abda", "HVM64" : "ami-56d4ad31"},
+			"ap-northeast-2" : {"PV64" : "", "HVM64" : "ami-dac312b4"},
+			"ap-southeast-1" : {"PV64" : "ami-2c963c4f", "HVM64" : "ami-dc9339bf"},
+			"ap-southeast-2" : {"PV64" : "ami-6f47400c", "HVM64" : "ami-1c47407f"},
+			"ap-south-1"     : {"PV64" : "", "HVM64" : "ami-f9daac96"},
+			"sa-east-1"      : {"PV64" : "", "HVM64" : "ami-80086dec"}
 		},
 		"AWSRegionSupport": {
 			"us-east-1"      : {"Lambda": "True" },
-			"us-west-1"      : {"Lambda": "False"},
+			"us-east-2"      : {"Lambda": "True" },
+			"us-west-1"      : {"Lambda": "True"},
 			"us-west-2"      : {"Lambda": "True" },
+			"ca-central-1"   : {"Lambda": "False" },
 			"eu-west-1"      : {"Lambda": "True" },
+			"eu-west-2"      : {"Lambda": "True" },
 			"eu-central-1"   : {"Lambda": "True"},
 			"ap-northeast-1" : {"Lambda": "True" },
-			"ap-northeast-2" : {"Lambda": "False" },
-			"ap-southeast-1" : {"Lambda": "False"},
+			"ap-northeast-2" : {"Lambda": "True" },
+			"ap-southeast-1" : {"Lambda": "True"},
 			"ap-southeast-2" : {"Lambda": "True"},
 			"ap-south-1"     : {"Lambda": "False"},
 			"sa-east-1"      : {"Lambda": "False"}
@@ -218,6 +250,7 @@
 							"Action": [
 								"cloudformation:DescribeStacks",
 								"ec2:DescribeInstances",
+								"ec2:GetConsoleOutput",
 								"ec2:DescribeVolumes",
 								"ec2:CreateSnapshot",
 								"ec2:DeleteSnapshot",
@@ -299,14 +332,14 @@
 								{
 									"Fn::If": [
 										"useLambda",
-										{ "Fn::Join": [ "", [ "arn:aws:iam::", { "Ref": "AWS::AccountId" }, ":role/", { "Ref": "AWS::StackName" }, "-LambdaExecutionRole-*" ] ] },
+										{ "Fn::Join": [ "", [ "arn:aws:iam::", { "Ref": "AWS::AccountId" }, ":role/", { "Ref": "AWS::StackName" }, "-LER-*" ] ] },
 										{ "Ref": "AWS::NoValue" }
 									]
 								},
 								{
 									"Fn::If": [
 										"useLambda",
-										{ "Fn::Join": [ "", [ "arn:aws:iam::", { "Ref": "AWS::AccountId" }, ":policy/", { "Ref": "AWS::StackName" }, "-LambdaExecutionRolePolicy" ] ] },
+										{ "Fn::Join": [ "", [ "arn:aws:iam::", { "Ref": "AWS::AccountId" }, ":policy/", { "Ref": "AWS::StackName" }, "-LERP" ] ] },
 										{ "Ref": "AWS::NoValue" }
 									]
 								}
@@ -569,7 +602,7 @@
 				"Timeout": "4800"
 			}
 		},
-		"LambdaExecutionRole": {
+		"LER": {
 			"Condition": "useLambda",
 			"Type": "AWS::IAM::Role",
 			"Properties": {
@@ -586,7 +619,7 @@
 				"Path": "/",
 				"Policies": [
 				{
-					"PolicyName": { "Fn::Join": [ "", [ { "Ref": "AWS::StackName" }, "-LambdaExecutionRolePolicy" ] ] },
+					"PolicyName": { "Fn::Join": [ "", [ { "Ref": "AWS::StackName" }, "-LERP" ] ] },
 					"PolicyDocument": {
 						"Version": "2012-10-17",
 						"Statement": [
@@ -630,9 +663,9 @@
 					]]}
 				},
 				"Handler": "index.handler",
-				"Runtime": "nodejs",
+				"Runtime": "nodejs4.3",
 				"Timeout": "30",
-				"Role": { "Fn::GetAtt" : ["LambdaExecutionRole", "Arn"] }
+				"Role": { "Fn::GetAtt" : ["LER", "Arn"] }
 			}
 		},
 		"AmiLambda": {

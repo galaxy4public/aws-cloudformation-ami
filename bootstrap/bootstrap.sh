@@ -55,8 +55,15 @@ until [ -e "${TARGET_VOL}1" ]; do
 	I=$((I + 1))
 done
 
-mkfs -F -t ext4 -E lazy_itable_init=0,lazy_journal_init=0 -L / -M / -q \
+mkfs -F -t ext4 -E lazy_itable_init=0,lazy_journal_init=0 -M / -q \
 	"${TARGET_VOL}1"
+
+# We are using tune2fs and sed here so we do not introduce additional
+# dependencies on blkid and grep for no particular reason
+FS_UUID=$(tune2fs -l "${TARGET_VOL}1" \
+	| sed -n 's,^\s*Filesystem\s\+UUID:\s*\([a-f0-9-]\+\),\1,;T;p' \
+	| tail -1 \
+)
 
 mkdir -p -m0 "$BOOTSTRAP_MNT"
 mount "${TARGET_VOL}1" "$BOOTSTRAP_MNT"
@@ -170,9 +177,15 @@ SCRIPT_CHECKSUM=$(sha256sum "${BASH_SOURCE[0]}" | cut -f1 -d' ')
 IMAGE_CHECKSUM=$(chroot "$BOOTSTRAP_MNT" /bin/sh -c "rpm -qa | LC_ALL=C sort | sha256sum | cut -f1 -d' '")
 DISTRO_RELEASE=$(chroot "$BOOTSTRAP_MNT" /bin/sh -c "rpm -q centos-release | sed -n 's,^centos-release-\([[:digit:].-]\+\)\.el.*,\1,;T;s,-,.,;p'")
 
-# If custom user data was provided add its hash to the image checksum
+# Compatibility with the previous versions
 if [ -s /root/bootstrap-addon.sh ]; then
-	IMAGE_CHECKSUM="$IMAGE_CHECKSUM:$(cat /root/bootstrap-addon.sh | sha256sum | cut -f1 -d' ')"
+	mkdir -p -m700 /root/bootstrap.d
+	mv /root/bootstrap-addon.sh /root/bootstrap.d/
+fi
+
+# If custom user data was provided add its hash to the image checksum
+if [ "$(echo /root/bootstrap.d/*)" != '/root/bootstrap.d/*']; then
+	IMAGE_CHECKSUM="$IMAGE_CHECKSUM:$(tar cf - -C /root/bootstrap.d $(ls -1a /root/bootstrap.d/* | sed 's,^/root/bootstrap.d/,,' | LC_ALL=C sort) | sha256sum | cut -f1 -d' ')"
 fi
 
 AMI_ID=$(aws ec2 describe-images --output json \
@@ -249,8 +262,10 @@ fi
 # dive in and generate it
 if [ -z "$AMI_ID" -o "${AMI_ID:0:4}" != 'ami-' ]; then
 
-cat > "$BOOTSTRAP_MNT"/etc/fstab << "__EOF__"
-LABEL=/		/		ext4		noatime,nodev			0 1
+DEVICE_ID=
+[ -n "$FS_UUID" ] && DEVICE_ID="UUID=\"$FS_UUID\"" ||:
+cat > "$BOOTSTRAP_MNT"/etc/fstab << __EOF__
+${DEVICE_ID:-/dev/xvda1}	/		ext4		noatime,nodev			0 1
 devtmpfs	/dev		devtmpfs	nosuid,noexec,size=16k,nr_inodes=1000	0 0
 tmpfs		/dev/shm	tmpfs		nosuid,noexec,nodev		0 0
 devpts		/dev/pts	devpts		nosuid,noexec,gid=5,mode=620	0 0
@@ -260,6 +275,8 @@ tmpfs		/tmp		tmpfs		nosuid,noexec,nodev		0 0
 /tmp		/var/tmp	none		bind				0 0
 __EOF__
 chmod 0644 "$BOOTSTRAP_MNT"/etc/fstab
+unset DEVICE_ID
+unset FS_UUID
 
 cat > "$BOOTSTRAP_MNT"/etc/sysconfig/network << "__EOF__"
 NETWORKING=yes
@@ -328,6 +345,7 @@ for module in \
 	parport:false \
 	parport_pc:false \
 	pata_acpi:false \
+	serio_raw:false \
 	snd:true \
 	snd_pcm:true \
 	snd_pcsp:true \
@@ -335,6 +353,7 @@ for module in \
 	soundcore:true \
 	ttm:true \
 	usbcore:false \
+	usbserial:false \
 ; do
 	cat <<-__EOF__ >> "$BOOTSTRAP_MNT"/etc/modprobe.d/blacklist.conf
 		blacklist ${module%%:*}
@@ -351,10 +370,11 @@ chroot "$BOOTSTRAP_MNT" grub2-install "$TARGET_VOL"
 chroot "$BOOTSTRAP_MNT" grub2-mkconfig -o /boot/grub2/grub.cfg
 rm -f "$BOOTSTRAP_MNT"/boot/initramfs-*.img
 chroot "$BOOTSTRAP_MNT" /bin/sh -ec '\
+	export LANG=C LC_ALL=C ;
 	INITRAMFS=$(rpm -ql kernel | grep ^/boot/initramfs- | sort -nr | head -1); \
 	KVERS=$(printf "$INITRAMFS" | sed -n "s,^/boot/initramfs-\(.*\)\.img,\1,;T;p"); \
 	[ -n "$INITRAMFS" -a -n "$KVERS" ] && \
-	dracut --force --verbose --no-hostonly --show-modules --printsize "$INITRAMFS" "$KVERS" \
+	dracut --strip --prelink --hardlink --ro-mnt --stdlog 3 --no-hostonly --drivers "xen-blkfront ext4 mbcache jbd2" --force --verbose --show-modules --printsize "$INITRAMFS" "$KVERS" \
 '
 chroot "$BOOTSTRAP_MNT" systemctl mask proc-sys-fs-binfmt_misc.{auto,}mount
 
@@ -362,24 +382,41 @@ chroot "$BOOTSTRAP_MNT" systemctl mask proc-sys-fs-binfmt_misc.{auto,}mount
 mkdir -m0 "$BOOTSTRAP_MNT"/root/.users
 chroot "$BOOTSTRAP_MNT" useradd -om -u 0 -g 0 -s /bin/bash -d /root/.users/admin r_admin
 
+# Ensure that only SELinux confined user are allowed to login via SSH
+chroot "$BOOTSTRAP_MNT" printf '%user_u\n' >> /etc/security/sepermit.conf
+
+# Be a bit more stricter re: the permissions we do not know about
+chroot "$BOOTSTRAP_MNT" printf 'handle-unknown=deny\n' >> /etc/selinux/semanage.conf
+
+# Configure SELinux policy
+chroot "$BOOTSTRAP_MNT" /bin/sh -ec "\
+	export LANG=C LC_ALL=C ;
+	semanage fcontext -N -a -e /tmp-inst /tmp/.private ;
+	semanage fcontext -N -a -e /var/tmp-inst /var/tmp/.private ;
+	semanage fcontext -N -a -f a -t ssh_home_t '/root/.users/[^/].+/\.ssh(/.*)?' ;
+
+	semanage boolean -N --modify --on  polyinstantiation_enabled ;
+	semanage boolean -N --modify --on  deny_execmem ;
+	semanage boolean -N --modify --off selinuxuser_execmod ;
+	semanage boolean -N --modify --off selinuxuser_execstack ;
+	semanage boolean -N --modify --on  secure_mode_policyload ;
+
+	semanage login -a -s root -r 's0-s0:c0.c1023' %root -N ;
+	semanage login -m -s user_u -r s0 __default__ -N ;
+	semanage login -a -s user_u -r s0 root -N
+"
+
+# Ensure that we have sane i18n environment unless explicitly changed
+cat > "$BOOTSTRAP_MNT"/etc/locale.conf << "__EOF__"
+LANG=C
+LC_MESSAGES=C
+__EOF__
+chmod 0644 "$BOOTSTRAP_MNT"/etc/locale.conf
+
 # cleanup service (this is to be launched on the initial bootstrap of the instance)
 cat > "$BOOTSTRAP_MNT"/root/cleanup.sh << "__EOF__"
 #!/bin/bash
 set -uxe -o pipefail
-
-semanage fcontext -a -e /tmp-inst /tmp/.private
-semanage fcontext -a -e /var/tmp-inst /var/tmp/.private
-semanage fcontext -a -f a -t ssh_home_t '/root/.users/[^/].+/\.ssh(/.*)?'
-setsebool -NP \
-	polyinstantiation_enabled=1 \
-	deny_execmem=1 \
-	selinuxuser_execmod=0 \
-	selinuxuser_execstack=0 \
-#
-
-semanage login -a -s root -r 's0-s0:c0.c1023' %root
-semanage login -m -s user_u -r s0 __default__
-semanage login -a -s user_u -r s0 root
 
 mkdir /var/log/journal
 chown -h root:systemd-journal /var/log/journal
@@ -701,53 +738,53 @@ chmod 0700 "$BOOTSTRAP_MNT"/usr/local/sbin/apply-etc-patches.sh
 
 mkdir -m700 "$BOOTSTRAP_MNT"/etc/patches
 cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/patches/bashrc.diff
---- etc/bashrc.centos	2015-08-12 14:21:52.000000000 +0000
-+++ etc/bashrc	2016-04-03 11:27:23.806000000 +0000
+--- etc/bashrc.centos	2016-11-05 17:19:35.000000000 +0000
++++ etc/bashrc	2017-03-20 02:59:33.608000000 +0000
 @@ -68,9 +68,9 @@
      # You could check uidgid reservation validity in
      # /usr/share/doc/setup-*/uidgid file
-     if [ $UID -gt 199 ] && [ "`id -gn`" = "`id -un`" ]; then
+     if [ $UID -gt 199 ] && [ "`/usr/bin/id -gn`" = "`/usr/bin/id -un`" ]; then
 -       umask 002
 -    else
         umask 022
 +    else
 +       umask 077
      fi
-
+ 
      SHELL=/bin/bash
 __EOF__
 
 cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/patches/csh.cshrc.diff
---- etc/csh.cshrc.centos	2013-06-07 14:31:32.000000000 +0000
-+++ etc/csh.cshrc	2016-04-03 11:31:15.295000000 +0000
+--- etc/csh.cshrc.centos	2016-11-05 17:19:35.000000000 +0000
++++ etc/csh.cshrc	2017-03-20 03:00:28.804000000 +0000
 @@ -8,9 +8,9 @@
  # You could check uidgid reservation validity in
  # /usr/share/doc/setup-*/uidgid file
- if ($uid > 199 && "`id -gn`" == "`id -un`") then
+ if ($uid > 199 && "`/usr/bin/id -gn`" == "`/usr/bin/id -un`") then
 -    umask 002
 -else
      umask 022
 +else
 +    umask 077
  endif
-
+ 
  if ($?prompt) then
 __EOF__
 
 cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/patches/profile.diff
---- etc/profile.centos	2013-06-07 14:31:32.000000000 +0000
-+++ etc/profile	2016-04-03 11:33:00.200000000 +0000
+--- etc/profile.centos	2016-11-05 17:19:35.000000000 +0000
++++ etc/profile	2017-03-20 03:01:31.243000000 +0000
 @@ -57,9 +57,9 @@
  # You could check uidgid reservation validity in
  # /usr/share/doc/setup-*/uidgid file
- if [ $UID -gt 199 ] && [ "`id -gn`" = "`id -un`" ]; then
+ if [ $UID -gt 199 ] && [ "`/usr/bin/id -gn`" = "`/usr/bin/id -un`" ]; then
 -    umask 002
 -else
      umask 022
 +else
 +    umask 077
  fi
-
+ 
  for i in /etc/profile.d/*.sh ; do
 __EOF__
 
@@ -815,9 +852,10 @@ rm "$BOOTSTRAP_MNT"/root/policies/initd2user.mod
 chroot "$BOOTSTRAP_MNT" semodule -N -i /root/policies/initd2user.pp
 
 # Inject custom code into the process if it was provided
-if [ -s /root/bootstrap-addon.sh ]; then
-	. /root/bootstrap-addon.sh
-fi
+for f in /root/bootstrap.d/*.sh ; do
+	[ "$f" != '/root/bootstrap.d/*.sh' ] || break
+	. "$f"
+done
 
 cd /root
 umount -R "$BOOTSTRAP_MNT"
@@ -839,10 +877,10 @@ if [ -z "$VOLUME_ID" -o -n "${VOLUME_ID//[[:alnum:]-]}" ]; then
 	exit 1
 fi
 
-# XXX: dangerous section -- if we get terminated beyond we will most
+# XXX: dangerous section -- if we get terminated beyond this we will most
 #      likely leave untracked artifacts behind when the stack is removed
 #      This must be addressed (probably with registering callbacks in a
-#      handler) as part of the upcoming modularisation of this scrip.
+#      handler) as part of the upcoming modularisation of this script.
 
 # Snapshot the volume
 SNAPSHOT_ID=$(aws ec2 create-snapshot --output json \
@@ -987,6 +1025,12 @@ aws ec2 delete-snapshot --output json --snapshot-id "$SNAPSHOT_ID"
 # We postponed the handling of the possible error condition encountered
 # in the wait cycle so we do not need to introduce additional cleanup
 if [ "$OUTPUT" != 'stopped' ]; then
+
+	# Try to preserve the console output of the temporary instance
+	aws ec2 get-console-output --output text \
+		--instance-id "$INSTANCE_ID" \
+		&> /root/temp-ec2-console.txt ||:
+
 	# Terminate the newly created instance since we do not want to leave it behind
 	if ! OUTPUT=$(aws ec2 terminate-instances --output json \
 				--instance-ids "$INSTANCE_ID" \
@@ -1185,7 +1229,7 @@ fi
 # XXX: another minefield is here.  We reported that the resource was
 #      successfully created, but if the parent stack fails for any
 #      reason it will trigger the deletion of our stack.  If we are
-#      running an a region where Lambda is not available this will
+#      running in a region where Lambda is not available this will
 #      result in a deadlock due to the cyclic dependency between the
 #      bootstrap image and SQS/SNS for custom resource
 
