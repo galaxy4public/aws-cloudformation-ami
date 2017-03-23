@@ -383,10 +383,10 @@ mkdir -m0 "$BOOTSTRAP_MNT"/root/.users
 chroot "$BOOTSTRAP_MNT" useradd -om -u 0 -g 0 -s /bin/bash -d /root/.users/admin r_admin
 
 # Ensure that only SELinux confined user are allowed to login via SSH
-chroot "$BOOTSTRAP_MNT" printf '%user_u\n' >> /etc/security/sepermit.conf
+printf '%user_u\n' >> "$BOOTSTRAP_MNT"/etc/security/sepermit.conf
 
 # Be a bit more stricter re: the permissions we do not know about
-chroot "$BOOTSTRAP_MNT" printf 'handle-unknown=deny\n' >> /etc/selinux/semanage.conf
+printf 'handle-unknown=deny\n' >> "$BOOTSTRAP_MNT"/etc/selinux/semanage.conf
 
 # Configure SELinux policy
 chroot "$BOOTSTRAP_MNT" /bin/sh -ec "\
@@ -399,7 +399,6 @@ chroot "$BOOTSTRAP_MNT" /bin/sh -ec "\
 	semanage boolean -N --modify --on  deny_execmem ;
 	semanage boolean -N --modify --off selinuxuser_execmod ;
 	semanage boolean -N --modify --off selinuxuser_execstack ;
-	semanage boolean -N --modify --on  secure_mode_policyload ;
 
 	semanage login -a -s root -r 's0-s0:c0.c1023' %root -N ;
 	semanage login -m -s user_u -r s0 __default__ -N ;
@@ -598,8 +597,8 @@ ln -s /etc/systemd/system/ec2-bootstrap.service "$BOOTSTRAP_MNT"/etc/systemd/sys
 printf '\n# Set sane umask for the init process\numask 027' >> "$BOOTSTRAP_MNT"/etc/sysconfig/init
 
 # Deny access via tcp_wrappers except for sshd
-echo "ALL:ALL" >> /etc/hosts.deny
-echo "sshd:ALL" >> /etc/hosts.allow
+printf 'ALL:ALL\n' >> "$BOOTSTRAP_MNT"/etc/hosts.deny
+printf 'sshd:ALL\n' >> "$BOOTSTRAP_MNT"/etc/hosts.allow
 
 cat > "$BOOTSTRAP_MNT"/etc/security/namespace.d/tmp.conf << "__EOF__"
 /tmp		/tmp/.private/		level:create		root,adm
