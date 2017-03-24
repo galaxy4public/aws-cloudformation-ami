@@ -383,7 +383,7 @@ mkdir -m0 "$BOOTSTRAP_MNT"/root/.users
 chroot "$BOOTSTRAP_MNT" useradd -om -u 0 -g 0 -s /bin/bash -d /root/.users/admin r_admin
 
 # Ensure that only SELinux confined user are allowed to login via SSH
-printf '%user_u\n' >> "$BOOTSTRAP_MNT"/etc/security/sepermit.conf
+printf '%%user_u\n' >> "$BOOTSTRAP_MNT"/etc/security/sepermit.conf
 
 # Be a bit more stricter re: the permissions we do not know about
 printf 'handle-unknown=deny\n' >> "$BOOTSTRAP_MNT"/etc/selinux/semanage.conf
@@ -681,6 +681,10 @@ sed -i '
         s#\(^[[:space:]]*UsePrivilegeSeparation[[:space:]]\+\)no\(.*\|$\)#\1yes\2#;
         s#\(^[[:space:]]*X11Forwarding[[:space:]]\+\)yes\(.*\|$\)#\1no\2#;
 ' "$BOOTSTRAP_MNT"/etc/ssh/sshd_config
+
+# Remove all locale and X Window related environment since the only
+# locale we have is C and we do not expect running X Window
+sed -i '/^\s*#\s\+Accept\s\+locale-related/d;/^\s*AcceptEnv\s\+\(L\|XMODIFIERS\)/d' "$BOOTSTRAP_MNT"/etc/ssh/sshd_config
 
 # Download and install the extensive privileges check tool
 curl -qsS4f --retry 900 --retry-delay 1 'https://raw.githubusercontent.com/galaxy4public/check-sugid/master/check-sugid.script' -o "$BOOTSTRAP_MNT"/usr/local/sbin/check-sugid
