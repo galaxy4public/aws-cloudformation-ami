@@ -319,7 +319,7 @@ chmod 0644 "$BOOTSTRAP_MNT"/etc/sysconfig/network-scripts/ifcfg-eth0
 
 # grub configuration
 cat > "$BOOTSTRAP_MNT"/etc/default/grub << "__EOF__"
-GRUB_CMDLINE_LINUX="crashkernel=auto console=tty0 console=ttyS0 net.ifnames=0 biosdevname=0 ipv6.disable=1 modprobe.blacklist=pcspkr,i2c_piix4 nousb audit=1 quiet"
+GRUB_CMDLINE_LINUX="crashkernel=auto console=tty0 console=ttyS0 net.ifnames=0 biosdevname=0 ipv6.disable=1 modprobe.blacklist=pcspkr,i2c_piix4 nousb audit=1 quiet systemd.log_level=debug systemd.log_target=console systemd.journald.forward_to_console=1"
 GRUB_TIMEOUT=30
 __EOF__
 chmod 0600 "$BOOTSTRAP_MNT"/etc/default/grub
