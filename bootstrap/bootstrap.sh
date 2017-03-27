@@ -3,6 +3,10 @@ TARGET_VOL="${1:-/dev/xvdf}"
 BOOTSTRAP_MNT="/mnt/bootstrap"
 AWS_TIMEOUT=30 # minutes (in reality no operation should take more than 10)
 
+LC_ALL=C
+LANG=C
+export LC_ALL LANG
+
 if [ -n "$cfnSignalURL" ]; then
 	error_handler()
 	{
@@ -180,11 +184,11 @@ DISTRO_RELEASE=$(chroot "$BOOTSTRAP_MNT" /bin/sh -c "rpm -q centos-release | sed
 # Compatibility with the previous versions
 if [ -s /root/bootstrap-addon.sh ]; then
 	mkdir -p -m700 /root/bootstrap.d
-	mv /root/bootstrap-addon.sh /root/bootstrap.d/
+	mv /root/bootstrap-addon.sh /root/bootstrap.d/99-curstom-user-data.sh
 fi
 
 # If custom user data was provided add its hash to the image checksum
-if [ "$(echo /root/bootstrap.d/*)" != '/root/bootstrap.d/*']; then
+if [ "$(echo /root/bootstrap.d/*)" != '/root/bootstrap.d/*' ]; then
 	IMAGE_CHECKSUM="$IMAGE_CHECKSUM:$(tar cf - -C /root/bootstrap.d $(ls -1a /root/bootstrap.d/* | sed 's,^/root/bootstrap.d/,,' | LC_ALL=C sort) | sha256sum | cut -f1 -d' ')"
 fi
 
@@ -192,7 +196,7 @@ AMI_ID=$(aws ec2 describe-images --output json \
 		--owners self \
 		--filters \
 			Name=state,Values=available \
-			"Name=architecture,Values=$(uname -p | sed 's,i.86,i386,')" \
+			"Name=architecture,Values=$(uname -m | sed 's,i.86,i386,')" \
 			"Name=tag:image/distro,Values=CentOS" \
 			"Name=tag:image/distro/release,Values=$DISTRO_RELEASE" \
 			"Name=tag:image/checksum,Values=$IMAGE_CHECKSUM" \
