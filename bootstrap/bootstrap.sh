@@ -854,12 +854,30 @@ require {
 #============= init_t ==============
 allow init_t unpriv_userdomain:process transition;
 __EOF__
-chmod 0600 "$BOOTSTRAP_MNT"/root/policies/initd2user.te
 
-chroot "$BOOTSTRAP_MNT" checkmodule -M -m -o /root/policies/initd2user.{mod,te}
-chroot "$BOOTSTRAP_MNT" semodule_package -o /root/policies/initd2user.pp -m /root/policies/initd2user.mod
-rm "$BOOTSTRAP_MNT"/root/policies/initd2user.mod
-chroot "$BOOTSTRAP_MNT" semodule -N -i /root/policies/initd2user.pp
+cat << "__EOF__" > "$BOOTSTRAP_MNT"/root/policies/no_kernel_load_modules.te
+module no_kernel_load_modules 1.0;
+
+require {
+	type kernel_t;
+	attribute daemon;
+	class system module_request;
+}
+
+dontaudit daemon kernel_t:system module_request;
+__EOF__
+
+chmod 0600 "$BOOTSTRAP_MNT"/root/policies/*.te
+
+chroot "$BOOTSTRAP_MNT" /bin/sh -exuc '
+	cd /root/policies
+	for module in *.te ; do
+		checkmodule -M -m -o "${module%.te}".{mod,te}
+		semodule_package -o "${module%.te}.pp" -m "${module%.te}.mod"
+		semodule -N -i "${module%.te}.pp"
+		rm "${module%.te}.mod"
+	done
+'
 
 # Inject custom code into the process if it was provided
 for f in /root/bootstrap.d/*.sh ; do
