@@ -160,7 +160,7 @@ until yum -y --noplugins -c /root/yum.conf \
 			basesystem grub2 kernel dracut e2fsprogs yum \
 			yum-plugin-post-transaction-actions attr patch \
 			dhclient openssh-server selinux-policy-targeted \
-			less vim-minimal policycoreutils-python audit nspr
+			less vim-minimal policycoreutils-python audit
 do
 	RC=$?
 	if [ $I -ge 2 ]; then
