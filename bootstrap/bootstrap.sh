@@ -147,6 +147,8 @@ mknod -m 0600 "$BOOTSTRAP_MNT"/dev/kmsg c 1 11
 mknod -m 0666 "$BOOTSTRAP_MNT"/dev/null c 1 3
 mknod -m 0666 "$BOOTSTRAP_MNT"/dev/full c 1 7
 mknod -m 0666 "$BOOTSTRAP_MNT"/dev/zero c 1 5
+mknod -m 0666 "$BOOTSTRAP_MNT"/dev/random c 1 8
+mknod -m 0666 "$BOOTSTRAP_MNT"/dev/urandom c 1 9
 
 # Sometimes we hit a bad mirror and yum fails with a timeout message, so
 # let's try three times
