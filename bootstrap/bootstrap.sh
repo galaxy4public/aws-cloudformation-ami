@@ -186,7 +186,7 @@ DISTRO_RELEASE=$(chroot "$BOOTSTRAP_MNT" /bin/sh -c "rpm -q centos-release | sed
 # Compatibility with the previous versions
 if [ -s /root/bootstrap-addon.sh ]; then
 	mkdir -p -m700 /root/bootstrap.d
-	mv /root/bootstrap-addon.sh /root/bootstrap.d/99-curstom-user-data.sh
+	mv /root/bootstrap-addon.sh /root/bootstrap.d/99-custom-user-data.sh
 fi
 
 # If custom user data was provided add its hash to the image checksum
