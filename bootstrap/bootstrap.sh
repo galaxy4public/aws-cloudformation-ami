@@ -180,8 +180,8 @@ __EOF__
 chmod 0644 "$BOOTSTRAP_MNT"/etc/rpm/macros.local
 
 SCRIPT_CHECKSUM=$(sha256sum "${BASH_SOURCE[0]}" | cut -f1 -d' ')
-IMAGE_CHECKSUM=$(chroot "$BOOTSTRAP_MNT" /bin/sh -c "rpm -qa | LC_ALL=C sort | sha256sum | cut -f1 -d' '")
-DISTRO_RELEASE=$(chroot "$BOOTSTRAP_MNT" /bin/sh -c "rpm -q centos-release | sed -n 's,^centos-release-\([[:digit:].-]\+\)\.el.*,\1,;T;s,-,.,;p'")
+IMAGE_CHECKSUM=$(chroot "$BOOTSTRAP_MNT" /bin/sh -c 'rpm -qa' | LC_ALL=C sort | sha256sum | cut -f1 -d' ')
+DISTRO_RELEASE=$(chroot "$BOOTSTRAP_MNT" /bin/sh -c 'rpm -q centos-release' | sed -n 's,^centos-release-\([[:digit:].-]\+\)\.el.*,\1,;T;s,-,.,;p')
 
 # Compatibility with the previous versions
 if [ -s /root/bootstrap-addon.sh ]; then
