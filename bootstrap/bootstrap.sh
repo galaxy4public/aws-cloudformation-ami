@@ -1,5 +1,5 @@
 #!/bin/bash
-TARGET_VOL="${1:-/dev/xvdf}"
+TARGET_VOL="${1:-}"
 BOOTSTRAP_MNT="/mnt/bootstrap"
 AWS_TIMEOUT=30 # minutes (in reality no operation should take more than 10)
 
@@ -39,6 +39,26 @@ if ! ping -q -c 3 8.8.8.8 >/dev/null ; then
 	exit 1
 fi
 
+if [ -z "$TARGET_VOL" ]; then
+	# No target volume has been specified, let's try to guess.
+	if [ -b /dev/nvme1n1 ]; then
+		# we are running on a new type of instances where EBS
+		# volumes are attached as NVMe devices
+		TARGET_VOL=/dev/nvme1n1
+	elif [ -b /dev/xvdf ]; then
+		# looks like an old type of an instance
+		TARGET_VOL=/dev/xvdf
+	else
+		echo "ERROR: failed to detect the target volume, please explicitly specify one as an argument to the script!" >&2
+		exit 1
+	fi
+fi
+
+# Since we may work with either NVMe or legacy block devices we need to
+# accomodate for their different naming conventions.
+P=''
+[ "${TARGET_VOL:0:9}" == /dev/nvme ] && P=p || :
+
 # This is an optional but very nice to have step (the downside is it takes time)
 #dd if=/dev/zero of="$TARGET_VOL" bs=100M || :
 
@@ -49,10 +69,10 @@ unit: sectors
 __EOF__
 
 I=0
-until [ -e "${TARGET_VOL}1" ]; do
+until [ -e "${TARGET_VOL}${P:-}1" ]; do
 	# if we don't get the device in 3 minutes, bail out
 	if [ $I -ge 180 ]; then
-		echo "ERROR: failed to acquire '${TARGET-VOL}1'!" >&2
+		echo "ERROR: failed to acquire '${TARGET_VOL}${P:-}1'!" >&2
 		exit 1
 	fi
 	sleep 1;
@@ -60,17 +80,17 @@ until [ -e "${TARGET_VOL}1" ]; do
 done
 
 mkfs -F -t ext4 -E lazy_itable_init=0,lazy_journal_init=0 -M / -q \
-	"${TARGET_VOL}1"
+	"${TARGET_VOL}${P:-}1"
 
 # We are using tune2fs and sed here so we do not introduce additional
 # dependencies on blkid and grep for no particular reason
-FS_UUID=$(tune2fs -l "${TARGET_VOL}1" \
+FS_UUID=$(tune2fs -l "${TARGET_VOL}${P:-}1" \
 	| sed -n 's,^\s*Filesystem\s\+UUID:\s*\([a-f0-9-]\+\),\1,;T;p' \
 	| tail -1 \
 )
 
 mkdir -p -m0 "$BOOTSTRAP_MNT"
-mount "${TARGET_VOL}1" "$BOOTSTRAP_MNT"
+mount "${TARGET_VOL}${P:-}1" "$BOOTSTRAP_MNT"
 touch "$BOOTSTRAP_MNT"/.autorelabel
 
 cat > /root/centos7.gpg << "__EOF__"
@@ -180,8 +200,18 @@ __EOF__
 chmod 0644 "$BOOTSTRAP_MNT"/etc/rpm/macros.local
 
 SCRIPT_CHECKSUM=$(sha256sum "${BASH_SOURCE[0]}" | cut -f1 -d' ')
-IMAGE_CHECKSUM=$(chroot "$BOOTSTRAP_MNT" /bin/sh -c "rpm -qa | LC_ALL=C sort | sha256sum | cut -f1 -d' '")
 DISTRO_RELEASE=$(chroot "$BOOTSTRAP_MNT" /bin/sh -c "rpm -q centos-release | sed -n 's,^centos-release-\([[:digit:].-]\+\)\.el.*,\1,;T;s,-,.,;p'")
+
+# It was discovered that "rpm" was failing silently (with exit code 0)
+# when /dev/urandom was not available.  This resulted in the wrong
+# image checksum being calculated, so to somewhat protect ourselves
+# we are checking for the DISTRO_RELEASE being populated.
+if [ -z "$DISTRO_RELEASE" ]; then
+	echo "ERROR: the DISTRO_RELEASE variable is empty, most likely RPM inside the chroot is playing out!" >&2
+	exit 2
+fi
+
+IMAGE_CHECKSUM=$(chroot "$BOOTSTRAP_MNT" /bin/sh -c "rpm -qa | LC_ALL=C sort | sha256sum | cut -f1 -d' '")
 
 # Compatibility with the previous versions
 if [ -s /root/bootstrap-addon.sh ]; then
@@ -380,7 +410,7 @@ chroot "$BOOTSTRAP_MNT" /bin/sh -ec '\
 	INITRAMFS=$(rpm -ql kernel | grep ^/boot/initramfs- | sort -nr | head -1); \
 	KVERS=$(printf "$INITRAMFS" | sed -n "s,^/boot/initramfs-\(.*\)\.img,\1,;T;p"); \
 	[ -n "$INITRAMFS" -a -n "$KVERS" ] && \
-	dracut --strip --prelink --hardlink --ro-mnt --stdlog 3 --no-hostonly --drivers "xen-blkfront ext4 mbcache jbd2" --force --verbose --show-modules --printsize "$INITRAMFS" "$KVERS" \
+	dracut --strip --prelink --hardlink --ro-mnt --stdlog 3 --no-hostonly --drivers "xen-blkfront nvme ext4 mbcache jbd2" --force --verbose --show-modules --printsize "$INITRAMFS" "$KVERS" \
 '
 chroot "$BOOTSTRAP_MNT" systemctl mask proc-sys-fs-binfmt_misc.{auto,}mount
 
@@ -633,7 +663,7 @@ abi.syscall32 = 0
 # Disable kernel stack tracer (default on CentOS 7)
 #kernel.stack_tracer_enabled = 0
 
-# Employ ASLR (addres space layout randomisation) memory techniques
+# Employ ASLR (address space layout randomisation) memory techniques
 #kernel.randomize_va_space = 2
 
 #
@@ -896,7 +926,7 @@ umount -R "$BOOTSTRAP_MNT"
 
 # Get the volume id
 VOLUME_ID=$(aws ec2 describe-volumes --output=json \
-			--filters "Name=attachment.device,Values=${TARGET_VOL/\/xvd//sd}" \
+			--filters "Name=attachment.device,Values=/dev/sdf" \
 				"Name=attachment.instance-id,Values=$INSTANCE_ID" \
 		| sed -n '/"VolumeId"[[:space:]]*:/s,^.*"VolumeId"[[:space:]]*:[[:space:]]*"\([[:alnum:]-]\+\)".*$,\1,;T;p;q' \
 )
@@ -1125,7 +1155,7 @@ done
 AMI_ID=$(aws ec2 register-image --output json \
 			--name "build-image-$(date +%Y%m%d%H%M%S)" \
 			--description 'A minimal CentOS 7 image' \
-			--architecture x86_64 --virtualization-type hvm --sriov-net-support simple \
+			--architecture x86_64 --virtualization-type hvm --sriov-net-support simple --ena-support \
 			--root-device-name /dev/xvda --block-device-mappings \
 				"DeviceName=/dev/xvda,Ebs={SnapshotId=$SNAPSHOT_ID,DeleteOnTermination=true}" \
 		| sed -n '/"ImageId"[[:space:]]*:/s,^.*"ImageId"[[:space:]]*:[[:space:]]*"\([[:alnum:]-]\+\)".*$,\1,;T;p;q' \

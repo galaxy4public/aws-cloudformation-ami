@@ -1,752 +1,406 @@
-{
-	"AWSTemplateFormatVersion": "2010-09-09",
-	"Description": "A self-terminating stack that produces a machine image for a CentOS 7 minimal system",
-	"Parameters": {
-		"BootstrapImage": {
-			"Description": "AMI for the bootstrap instance, should be using 'yum' and support 'cloud-init' (if empty will use Amazon Linux AMI)",
-			"Type": "String",
-			"Default": ""
-		},
-		"BootstrapInstanceType": {
-			"Description": "Instance type to use for the bootstrap image",
-			"Type": "String",
-			"Default": "t2.micro",
-			"AllowedValues": [
-				"c1.medium", "c1.xlarge",
-				"c3.large", "c3.xlarge", "c3.2xlarge", "c3.4xlarge", "c3.8xlarge",
-				"c4.large", "c4.xlarge", "c4.2xlarge", "c4.4xlarge", "c4.8xlarge",
-				"d2.large", "d2.xlarge", "d2.2xlarge", "d2.4xlarge", "d2.8xlarge",
-				"g2.2xlarge", "g2.8xlarge",
-				"hs1.8xlarge",
-				"i2.xlarge", "i2.2xlarge", "i2.4xlarge", "i2.8xlarge",
-				"i3.xlarge", "i3.2xlarge", "i3.4xlarge", "i3.8xlarge", "i3.16xlarge",
-				"m1.small", "m1.large", "m1.medium", "m1.xlarge",
-				"m2.xlarge", "m2.2xlarge", "m2.4xlarge",
-				"m3.large", "m3.medium", "m3.xlarge", "m3.2xlarge",
-				"m4.large", "m4.xlarge", "m4.2xlarge", "m4.4xlarge", "m4.10xlarge", "m4.16xlarge",
-				"r3.large", "r3.xlarge", "r3.2xlarge", "r3.4xlarge", "r3.8xlarge",
-				"r4.large", "r4.xlarge", "r4.2xlarge", "r4.4xlarge", "r4.8xlarge", "r4.16xlarge",
-				"t1.micro",
-				"t2.nano", "t2.micro", "t2.small", "t2.medium", "t2.large", "t2.xlarge", "t2.2xlarge",
-				"x1.16xlarge", "x1.32xlarge"
-			],
-			"ConstraintDescription": "must be a supported instance type, if not sure go with the default"
-		},
-		"BootstrapVolumeSize": {
-			"Description": "Size of the bootstrap volume that would be used as for the root filesystem (in GB)",
-			"Type": "Number",
-			"Default": "8",
-			"MinValue": "8",
-			"ConstraintDescription": "must be greater than 8 gigabytes"
-		},
-		"VpcId": {
-			"Type": "String",
-			"Description": "VPC where the bootstrap instance will be launched.  If you do not specify this parameter you need to ensure that the default security group allows outbound traffic on tcp/80 and tcp/443",
-			"Default": ""
-		},
-		"SubnetId": {
-			"Type": "AWS::EC2::Subnet::Id",
-			"Description": "Id of the subnet where the bootstrap instance is going to be launched (must have Internet connectivity to download packages!)"
-		},
-		"PreserveStack": {
-			"Type": "String",
-			"Description": "Whether this stack should be preserved after generation of the image or not",
-			"Default": "False",
-			"AllowedValues": [ "False", "True" ],
-			"ConstraintDescription": "must be either False or True, no other values are accepted"
-		},
-		"KeyName": {
-			"Type": "String",
-			"Description": "Key pair name to install on the bootstrap image in case you need to debug the bootstrap process",
-			"Default": ""
-		},
-		"BootstrapScriptUrl": {
-			"Type": "String",
-			"Description": "An URL of the alternative bootstrap script",
-			"Default": ""
-		},
-		"ParentStackId": {
-			"Type": "String",
-			"Description": "The ID of the parent stack.  Required if this stack is nested in another stack",
-			"Default": ""
-		},
-		"UserData": {
-			"Type": "String",
-			"Description": "Additional commands to execute just before the image is going to be created",
-			"Default": ""
-		},
-		"UpdateTrigger": {
-			"Type": "String",
-			"Description": "Every time this parameter changes the associated stack would go through CloudFormation update routine, so if you want to regenerate the resulting AMI provide a different value each time you run the stack update",
-			"Default": ""
-		}
-	},
-	"Metadata": {
-		"AWS::CloudFormation::Interface": {
-			"ParameterGroups": [
-			{
-				"Label": { "default": "Required Configuration" },
-				"Parameters": [ "SubnetId" ]
-			},
-			{
-				"Label": { "default": "Optional Configuration" },
-				"Parameters": [ "VpcId", "BootstrapImage", "BootstrapInstanceType", "BootstrapVolumeSize", "BootstrapScriptUrl", "UserData" ]
-			},
-			{
-				"Label": { "default": "Debug / Internal Configuration" },
-				"Parameters": [ "KeyName", "PreserveStack", "ParentStackId", "UpdateTrigger" ]
-			}
-			],
-			"ParameterLabels": {
-				"VpcId": { "default": "VPC ID" },
-				"SubnetId": { "default": "SubnetId" },
-				"BootstrapImage": { "default": "Bootstrap AMI" },
-				"BootstrapInstanceType": { "default": "Bootstrap Instance Type" },
-				"BootstrapVolumeSize": { "default": "Bootstrap Volume Size (GB)" },
-				"BootstrapScriptUrl": { "default": "Bootstrap Script URL" },
-				"UserData": { "default": "Additional bootstrap code" },
-				"KeyName": { "default": "SSH Key Name" },
-				"PreserveStack": { "default": "Preserve Created Stack?" },
-				"ParentStackId": { "default": "Parent Stack ID" },
-				"UpdateTrigger": { "default": "Update Trigger" }
-			}
-		}
-	},
-	"Conditions": {
-		"useLambda": { "Fn::Equals": [ { "Fn::FindInMap": [ "AWSRegionSupport", { "Ref" : "AWS::Region" }, "Lambda" ] }, "True" ] },
-		"useQueue": { "Fn::Not": [ { "Fn::Equals": [ { "Fn::FindInMap": [ "AWSRegionSupport", { "Ref" : "AWS::Region" }, "Lambda" ] }, "True" ] } ] },
-		"useBootstrapImage": { "Fn::Not": [ { "Fn::Equals": [ { "Ref" : "BootstrapImage" }, "" ] } ] },
-		"useKeyName": { "Fn::Not": [ { "Fn::Equals": [ { "Ref" : "KeyName" }, "" ] } ] },
-		"useUserData": { "Fn::Not": [ { "Fn::Equals": [ { "Ref" : "UserData" }, "" ] } ] },
-		"useAltBootstrapScript": { "Fn::Not": [ { "Fn::Equals": [ { "Ref" : "BootstrapScriptUrl" }, "" ] } ] },
-		"useVpcId": { "Fn::Not": [ { "Fn::Equals": [ { "Ref" : "VpcId" }, "" ] } ] },
-		"useParentStackId": { "Fn::Not": [ { "Fn::Equals": [ { "Ref" : "ParentStackId" }, "" ] } ] },
-		"preserveStack": { "Fn::Equals": [ { "Ref" : "PreserveStack" }, "True" ] }
-	},
-	"Mappings": {
-		"AWSInstanceType2Arch": {
-			"t1.micro"    : { "Arch" : "PV64"   },
-			"t2.nano"     : { "Arch" : "HVM64"  },
-			"t2.micro"    : { "Arch" : "HVM64"  },
-			"t2.small"    : { "Arch" : "HVM64"  },
-			"t2.medium"   : { "Arch" : "HVM64"  },
-			"t2.large"    : { "Arch" : "HVM64"  },
-			"t2.xlarge"   : { "Arch" : "HVM64"  },
-			"t2.2xlarge"  : { "Arch" : "HVM64"  },
-			"m1.small"    : { "Arch" : "PV64"   },
-			"m1.medium"   : { "Arch" : "PV64"   },
-			"m1.large"    : { "Arch" : "PV64"   },
-			"m1.xlarge"   : { "Arch" : "PV64"   },
-			"m2.xlarge"   : { "Arch" : "PV64"   },
-			"m2.2xlarge"  : { "Arch" : "PV64"   },
-			"m2.4xlarge"  : { "Arch" : "PV64"   },
-			"m3.medium"   : { "Arch" : "HVM64"  },
-			"m3.large"    : { "Arch" : "HVM64"  },
-			"m3.xlarge"   : { "Arch" : "HVM64"  },
-			"m3.2xlarge"  : { "Arch" : "HVM64"  },
-			"m4.large"    : { "Arch" : "HVM64"  },
-			"m4.xlarge"   : { "Arch" : "HVM64"  },
-			"m4.2xlarge"  : { "Arch" : "HVM64"  },
-			"m4.4xlarge"  : { "Arch" : "HVM64"  },
-			"m4.10xlarge" : { "Arch" : "HVM64"  },
-			"m4.16xlarge" : { "Arch" : "HVM64"  },
-			"c1.medium"   : { "Arch" : "PV64"   },
-			"c1.xlarge"   : { "Arch" : "PV64"   },
-			"c3.large"    : { "Arch" : "HVM64"  },
-			"c3.xlarge"   : { "Arch" : "HVM64"  },
-			"c3.2xlarge"  : { "Arch" : "HVM64"  },
-			"c3.4xlarge"  : { "Arch" : "HVM64"  },
-			"c3.8xlarge"  : { "Arch" : "HVM64"  },
-			"c4.large"    : { "Arch" : "HVM64"  },
-			"c4.xlarge"   : { "Arch" : "HVM64"  },
-			"c4.2xlarge"  : { "Arch" : "HVM64"  },
-			"c4.4xlarge"  : { "Arch" : "HVM64"  },
-			"c4.8xlarge"  : { "Arch" : "HVM64"  },
-			"g2.2xlarge"  : { "Arch" : "HVMG2"  },
-			"g2.8xlarge"  : { "Arch" : "HVMG2"  },
-			"r3.large"    : { "Arch" : "HVM64"  },
-			"r3.xlarge"   : { "Arch" : "HVM64"  },
-			"r3.2xlarge"  : { "Arch" : "HVM64"  },
-			"r3.4xlarge"  : { "Arch" : "HVM64"  },
-			"r3.8xlarge"  : { "Arch" : "HVM64"  },
-			"r4.large"    : { "Arch" : "HVM64"  },
-			"r4.xlarge"   : { "Arch" : "HVM64"  },
-			"r4.2xlarge"  : { "Arch" : "HVM64"  },
-			"r4.4xlarge"  : { "Arch" : "HVM64"  },
-			"r4.8xlarge"  : { "Arch" : "HVM64"  },
-			"r4.16xlarge" : { "Arch" : "HVM64"  },
-			"x1.16xlarge" : { "Arch" : "HVM64"  },
-			"x1.32xlarge" : { "Arch" : "HVM64"  },
-			"d2.large"    : { "Arch" : "HVM64"  },
-			"d2.xlarge"   : { "Arch" : "HVM64"  },
-			"d2.2xlarge"  : { "Arch" : "HVM64"  },
-			"d2.4xlarge"  : { "Arch" : "HVM64"  },
-			"d2.8xlarge"  : { "Arch" : "HVM64"  },
-			"i2.xlarge"   : { "Arch" : "HVM64"  },
-			"i2.2xlarge"  : { "Arch" : "HVM64"  },
-			"i2.4xlarge"  : { "Arch" : "HVM64"  },
-			"i2.8xlarge"  : { "Arch" : "HVM64"  },
-			"i3.xlarge"   : { "Arch" : "HVM64"  },
-			"i3.2xlarge"  : { "Arch" : "HVM64"  },
-			"i3.4xlarge"  : { "Arch" : "HVM64"  },
-			"i3.8xlarge"  : { "Arch" : "HVM64"  },
-			"i3.16xlarge" : { "Arch" : "HVM64"  },
-			"hs1.8xlarge" : { "Arch" : "PV64"  }
-		},
-		"AWSRegionArch2AMI": {
-			"us-east-1"      : {"PV64" : "ami-7a3dd76c", "HVM64" : "ami-0b33d91d"},
-			"us-east-2"      : {"PV64" : "", "HVM64" : "ami-c55673a0"},
-			"us-west-1"      : {"PV64" : "ami-f25a0892", "HVM64" : "ami-165a0876"},
-			"us-west-2"      : {"PV64" : "ami-8a72cdea", "HVM64" : "ami-f173cc91"},
-			"ca-central-1"   : {"PV64" : "", "HVM64" : "ami-ebed508f"},
-			"eu-west-1"      : {"PV64" : "ami-e0f2af86", "HVM64" : "ami-70edb016"},
-			"eu-west-2"      : {"PV64" : "", "HVM64" : "ami-f1949e95"},
-			"eu-central-1"   : {"PV64" : "ami-3b0fc054", "HVM64" : "ami-af0fc0c0"},
-			"ap-northeast-1" : {"PV64" : "ami-bdd2abda", "HVM64" : "ami-56d4ad31"},
-			"ap-northeast-2" : {"PV64" : "", "HVM64" : "ami-dac312b4"},
-			"ap-southeast-1" : {"PV64" : "ami-2c963c4f", "HVM64" : "ami-dc9339bf"},
-			"ap-southeast-2" : {"PV64" : "ami-6f47400c", "HVM64" : "ami-1c47407f"},
-			"ap-south-1"     : {"PV64" : "", "HVM64" : "ami-f9daac96"},
-			"sa-east-1"      : {"PV64" : "", "HVM64" : "ami-80086dec"}
-		},
-		"AWSRegionSupport": {
-			"us-east-1"      : {"Lambda": "True" },
-			"us-east-2"      : {"Lambda": "True" },
-			"us-west-1"      : {"Lambda": "True"},
-			"us-west-2"      : {"Lambda": "True" },
-			"ca-central-1"   : {"Lambda": "False" },
-			"eu-west-1"      : {"Lambda": "True" },
-			"eu-west-2"      : {"Lambda": "True" },
-			"eu-central-1"   : {"Lambda": "True"},
-			"ap-northeast-1" : {"Lambda": "True" },
-			"ap-northeast-2" : {"Lambda": "True" },
-			"ap-southeast-1" : {"Lambda": "True"},
-			"ap-southeast-2" : {"Lambda": "True"},
-			"ap-south-1"     : {"Lambda": "False"},
-			"sa-east-1"      : {"Lambda": "False"}
-		}
-	},
-	"Resources": {
-		"Role": {
-			"Type": "AWS::IAM::Role",
-			"Properties": {
-				"Path": "/",
-				"AssumeRolePolicyDocument": {
-					"Statement": [
-					{
-						"Effect": "Allow",
-						"Principal": { "Service": [ "ec2.amazonaws.com" ] },
-						"Action": [ "sts:AssumeRole" ]
-					}
-					]
-				},
-				"Policies": [
-				{
-					"PolicyName": { "Fn::Join": [ "", [ { "Ref": "AWS::StackName" }, "-RolePolicy" ] ] },
-					"PolicyDocument": {
-						"Statement": [
-						{
-							"Resource": [ "*" ],
-							"Action": [
-								"cloudformation:DescribeStacks",
-								"ec2:DescribeInstances",
-								"ec2:GetConsoleOutput",
-								"ec2:DescribeVolumes",
-								"ec2:CreateSnapshot",
-								"ec2:DeleteSnapshot",
-								"ec2:DescribeSnapshots",
-								"ec2:DescribeSubnets",
-								"ec2:CreateImage",
-								"ec2:DescribeImages",
-								"ec2:RegisterImage",
-								"ec2:DeregisterImage",
-								"ec2:CreateTags"
-							],
-							"Effect": "Allow"
-						},
-						{
-							"Resource": [
-								{ "Fn::Join": [ "", [ "arn:aws:ec2:", { "Ref": "AWS::Region" }, "::image/*" ] ] },
-								{ "Fn::Join": [ "", [ "arn:aws:ec2:", { "Ref": "AWS::Region" }, ":", { "Ref": "AWS::AccountId" }, ":instance/*" ] ] },
-								{ "Fn::Join": [ "", [ "arn:aws:ec2:", { "Ref": "AWS::Region" }, ":", { "Ref": "AWS::AccountId" }, ":volume/*" ] ] },
-								{ "Fn::Join": [ "", [ "arn:aws:ec2:", { "Ref": "AWS::Region" }, ":", { "Ref": "AWS::AccountId" }, ":network-interface/*" ] ] },
-								{ "Fn::Join": [ "", [ "arn:aws:ec2:", { "Ref": "AWS::Region" }, ":", { "Ref": "AWS::AccountId" }, ":subnet/", { "Ref": "SubnetId" } ] ] },
-								{ "Fn::If": [
-									"useKeyName",
-									{ "Fn::Join": [ "", [ "arn:aws:ec2:", { "Ref": "AWS::Region" }, ":", { "Ref": "AWS::AccountId" }, ":key-pair/", { "Ref": "KeyName" } ] ] },
-									{ "Ref": "AWS::NoValue" }
-								] },
-								{ "Fn::Join": [ "", [ "arn:aws:ec2:", { "Ref": "AWS::Region" }, ":", { "Ref": "AWS::AccountId" }, ":security-group/*" ] ] }
-							],
-							"Action": [ "ec2:RunInstances" ],
-							"Effect": "Allow"
-						},
-						{
-							"Resource": {
-								"Fn::Join": [ "", [ "arn:aws:ec2:", { "Ref": "AWS::Region" }, ":", { "Ref": "AWS::AccountId" }, ":instance/*" ] ]
-							},
-							"Action": [ "ec2:TerminateInstances" ],
-							"Condition": {
-								"StringEquals": {
-									"ec2:InstanceType": [ "t2.micro", { "Ref": "BootstrapInstanceType" } ],
-									"ec2:ResourceTag/purpose": [ "build-image" ]
-								}
-							},
-							"Effect": "Allow"
-						},
-						{
-							"Resource": {
-								"Fn::Join": [ "", [ "arn:aws:cloudformation:", { "Ref": "AWS::Region" }, ":", { "Ref": "AWS::AccountId" }, ":stack/", { "Ref": "AWS::StackName" }, "/*" ] ]
-							},
-							"Action": [
-								"cloudformation:GetTemplate",
-								"cloudformation:DeleteStack",
-								"cloudformation:UpdateStack",
-								"cloudformation:DescribeStackResources"
-							],
-							"Effect": "Allow"
-						},
-						{
-							"Resource": {
-								"Fn::Join": [ "", [ "arn:aws:cloudformation:", { "Ref": "AWS::Region" }, ":", { "Ref": "AWS::AccountId" }, ":stack/", { "Ref": "AWS::StackName" } ] ]
-							},
-							"Action": [
-								"cloudformation:DescribeStackEvents"
-							],
-							"Effect": "Allow"
-						},
-						{
-							"Resource": {
-								"Fn::Join": [ "", [ "arn:aws:iam::", { "Ref": "AWS::AccountId" }, ":instance-profile/", { "Ref": "AWS::StackName" }, "-InstanceProfile-*" ] ]
-							},
-							"Action": [
-								"iam:RemoveRoleFromInstanceProfile",
-								"iam:DeleteInstanceProfile"
-							],
-							"Effect": "Allow"
-						},
-						{
-							"Resource": [
-								{ "Fn::Join": [ "", [ "arn:aws:iam::", { "Ref": "AWS::AccountId" }, ":role/", { "Ref": "AWS::StackName" }, "-Role-*" ] ] },
-								{ "Fn::Join": [ "", [ "arn:aws:iam::", { "Ref": "AWS::AccountId" }, ":policy/", { "Ref": "AWS::StackName" }, "-RolePolicy" ] ] },
-								{
-									"Fn::If": [
-										"useLambda",
-										{ "Fn::Join": [ "", [ "arn:aws:iam::", { "Ref": "AWS::AccountId" }, ":role/", { "Ref": "AWS::StackName" }, "-LER-*" ] ] },
-										{ "Ref": "AWS::NoValue" }
-									]
-								},
-								{
-									"Fn::If": [
-										"useLambda",
-										{ "Fn::Join": [ "", [ "arn:aws:iam::", { "Ref": "AWS::AccountId" }, ":policy/", { "Ref": "AWS::StackName" }, "-LERP" ] ] },
-										{ "Ref": "AWS::NoValue" }
-									]
-								}
-							],
-							"Action": [
-								"iam:PutRolePolicy",
-								"iam:DeleteRolePolicy",
-								"iam:DeleteRole"
-							],
-							"Effect": "Allow"
-						},
-						{
-							"Fn::If": [
-								"useLambda",
-								{
-									"Resource": { "Fn::Join": [ "", [ "arn:aws:lambda:", { "Ref": "AWS::Region" },":", { "Ref": "AWS::AccountId" }, ":function:", { "Ref": "AWS::StackName" }, "-ExtractAmiId-*" ] ] },
-									"Action": [
-										"lambda:InvokeFunction",
-										"lambda:DeleteFunction"
-									],
-									"Effect": "Allow"
-								},
-								{ "Ref": "AWS::NoValue" }
-							]
-						},
-						{
-							"Fn::If": [
-								"useQueue",
-								{
-									"Resource": { "Fn::Join": [ "", [ "arn:aws:sqs:", { "Ref": "AWS::Region" },":", { "Ref": "AWS::AccountId" }, ":", { "Ref": "AWS::StackName" }, "-Queue-*" ] ] },
-									"Action": [
-										"sqs:ReceiveMessage",
-										"sqs:DeleteMessage",
-										"sqs:DeleteQueue",
-										"sqs:SetQueueAttributes"
-									],
-									"Effect": "Allow"
-								},
-								{ "Ref": "AWS::NoValue" }
-							]
-						},
-						{
-							"Fn::If": [
-								"useQueue",
-								{
-									"Resource": {
-										"Fn::Join": [ "", [
-											"arn:aws:sns:",
-											{ "Ref": "AWS::Region" },
-											":",
-											{ "Ref": "AWS::AccountId" },
-											":*" 
-										] ]
-									},
-									"Action": [
-										"sns:ListTopics",
-										"sns:GetTopicAttributes"
-									],
-									"Effect": "Allow"
-								},
-								{ "Ref": "AWS::NoValue" }
-							]
-						},
-						{
-							"Fn::If": [
-								"useQueue",
-								{
-									"Resource": { "Fn::Join": [ "", [ "arn:aws:sns:", { "Ref": "AWS::Region" },":", { "Ref": "AWS::AccountId" }, ":", { "Ref": "AWS::StackName" }, "-SnsTopic-*" ] ] },
-									"Action": [ "sns:DeleteTopic" ],
-									"Effect": "Allow"
-								},
-								{ "Ref": "AWS::NoValue" }
-							]
-						},
-						{
-							"Fn::If": [
-								"useParentStackId",
-								{
-									"Resource": {
-										"Fn::Join": [ "", [ { "Ref": "ParentStackId" } ] ]
-									},
-									"Action": [
-										"cloudformation:DescribeStackEvents"
-									],
-									"Effect": "Allow"
-								},
-								{ "Ref": "AWS::NoValue" }
-							]
-						},
-						{
-							"Fn::If": [
-								"useVpcId",
-								{
-									"Resource": [ "*" ],
-									"Action": [
-										"ec2:CreateSecurityGroup",
-										"ec2:DescribeSecurityGroups"
-									],
-									"Effect": "Allow"
-								},
-								{ "Ref": "AWS::NoValue" }
-							]
-						},
-						{
-							"Fn::If": [
-								"useVpcId",
-								{
-									"Resource": { "Fn::Join": [ "", [ "arn:aws:ec2:", { "Ref": "AWS::Region" }, ":", { "Ref": "AWS::AccountId" }, ":security-group/*" ] ] },
-									"Action": [
-										"ec2:DeleteSecurityGroup",
-										"ec2:RevokeSecurityGroupIngress",
-										"ec2:RevokeSecurityGroupEgress",
-										"ec2:AuthorizeSecurityGroupIngress",
-										"ec2:AuthorizeSecurityGroupEgress"
-									],
-									"Effect": "Allow"
-								},
-								{ "Ref": "AWS::NoValue" }
-							]
-						}
-						]
-					}
-				}
-				]
-			}
-		},
-		"InstanceProfile": {
-			"Type": "AWS::IAM::InstanceProfile",
-			"Properties": {
-				"Path": "/",
-				"Roles": [ { "Ref": "Role" } ]
-			}
-		},
-		"BootstrapSecurityGroup": {
-			"Condition": "useVpcId",
-			"Type": "AWS::EC2::SecurityGroup",
-			"Properties": {
-				"GroupDescription": "A temporary security group to allow the bootstrap instance retrieve software for the installation purposes",
-				"SecurityGroupEgress": [
-				{
-					"IpProtocol": "-1",
-					"FromPort": "-1",
-					"ToPort": "-1",
-					"CidrIp": "0.0.0.0/0"
-				}
-				],
-				"SecurityGroupIngress": [ ],
-				"VpcId": { "Ref": "VpcId" }
-			}
-		},
-		"BootstrapInstance": {
-			"Type": "AWS::EC2::Instance",
-			"Properties": {
-				"ImageId": { "Fn::If": [
-					"useBootstrapImage",
-					{ "Ref": "BootstrapImage" },
-					{ "Fn::FindInMap": [
-						"AWSRegionArch2AMI",
-						{ "Ref": "AWS::Region" },
-						{ "Fn::FindInMap": [
-							"AWSInstanceType2Arch",
-							{ "Ref" : "BootstrapInstanceType" },
-							"Arch"
-						] }
-					] }
-				] },
-				"InstanceType": { "Ref": "BootstrapInstanceType" },
-				"IamInstanceProfile": { "Ref": "InstanceProfile" },
-				"KeyName": { "Fn::If": [
-					"useKeyName",
-					{ "Ref": "KeyName" },
-					{ "Ref": "AWS::NoValue" }
-				] },
-				"Tags": [
-				{
-					"Key": "Name",
-					"Value": "bootstrap-image"
-				},
-				{
-					"Key": "purpose",
-					"Value": "build-image"
-				}
-				],
-				"BlockDeviceMappings": [
-				{
-					"DeviceName": "/dev/sdf",
-					"Ebs": {
-						"VolumeSize": { "Ref": "BootstrapVolumeSize" },
-						"VolumeType": "gp2"
-					}
-				}
-				],
-				"NetworkInterfaces": [
-				{
-					"AssociatePublicIpAddress": "True",
-					"DeviceIndex": "0",
-					"DeleteOnTermination": "true",
-					"SubnetId": { "Ref": "SubnetId" },
-					"GroupSet": [
-					{
-						"Fn::If": [
-							"useVpcId",
-							{ "Ref": "BootstrapSecurityGroup" },
-							{ "Ref": "AWS::NoValue" }
-						]
-					}
-					]
-				}
-				],
-				"UserData": { "Fn::Base64": { "Fn::Join": [ "", [
-					"#!/bin/bash\n",
-					"# Update stack trigger: ", { "Ref": "UpdateTrigger" }, "\n",
-					"export AWS_DEFAULT_REGION='", { "Ref": "AWS::Region" }, "'\n",
-					"export cfnStackId='", { "Ref": "AWS::StackId" }, "'\n",
-					"export cfnParentStackId='", { "Fn::If": [ "useParentStackId", { "Ref": "ParentStackId" }, { "Ref": "AWS::StackId" } ] }, "'\n",
-					"export cfnSignalURL='", { "Ref": "BootstrapWaitHandle" }, "'\n",
-					{ "Fn::If": [ "useQueue", "export cfnUseQueue=True\n", { "Ref": "AWS::NoValue" } ] },
-					"export PRESERVE_STACK=\"", { "Fn::If": [ "preserveStack", "True",  "${cfnStackId#$cfnParentStackId}" ] }, "\"\n",
-					"set -exu -o pipefail\n",
-					{
-						"Fn::If": [
-							"useAltBootstrapScript",
-							{
-								"Fn::Join": [ "", [
-									"curl -qsS4f --retry 180 --retry-delay 1 '", { "Ref": "BootstrapScriptUrl" }, "' -o /root/bootstrap.sh\n"
-								] ]
-							},
-							{
-								"Fn::Join": [ "", [
-									"curl -qsS4f --retry 180 --retry-delay 1 'https://raw.githubusercontent.com/galaxy4public/aws-cloudformation-ami/master/bootstrap/bootstrap.sh' -o /root/bootstrap.sh\n"
-								] ]
-							}
-						]
-					},
-					"chmod 0700 /root/bootstrap.sh\n",
-					{
-						"Fn::If": [
-							"useUserData",
-							{
-								"Fn::Join": [ "", [
-									"printf '%s' '", { "Ref": "UserData" }, "' > /root/bootstrap-addon.sh\n"
-								] ]
-							},
-							{ "Ref": "AWS::NoValue" }
-						]
-					},
-					"/root/bootstrap.sh >&2\n"
-				] ] } }
-			}
-		},
-		"BootstrapWaitHandle": {
-			"Type": "AWS::CloudFormation::WaitConditionHandle",
-			"Properties": {}
-		},
-		"BootstrapWaitCondition": {
-			"Type": "AWS::CloudFormation::WaitCondition",
-			"DependsOn": "BootstrapInstance",
-			"Properties": {
-				"Handle": { "Ref": "BootstrapWaitHandle" },
-				"Timeout": "4800"
-			}
-		},
-		"LER": {
-			"Condition": "useLambda",
-			"Type": "AWS::IAM::Role",
-			"Properties": {
-				"AssumeRolePolicyDocument": {
-					"Version": "2012-10-17",
-					"Statement": [
-					{
-						"Effect": "Allow",
-						"Principal": { "Service": [ "lambda.amazonaws.com" ] },
-						"Action": ["sts:AssumeRole"]
-					}
-					]
-				},
-				"Path": "/",
-				"Policies": [
-				{
-					"PolicyName": { "Fn::Join": [ "", [ { "Ref": "AWS::StackName" }, "-LERP" ] ] },
-					"PolicyDocument": {
-						"Version": "2012-10-17",
-						"Statement": [
-						{
-							"Effect": "Allow",
-							"Action": [ "logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents" ],
-							"Resource": [
-								{ "Fn::Join": [ "", [ "arn:aws:logs:", { "Ref": "AWS::Region" },":", { "Ref": "AWS::AccountId" }, ":log-group/aws/lambda/", { "Ref": "AWS::StackName" }, "-ExtractAmiId-*" ] ] }
-							]
-						}
-						]
-					}
-				}
-				]
-			}
-		},
-		"ExtractAmiId": {
-			"Condition": "useLambda",
-			"Type": "AWS::Lambda::Function",
-			"Properties": {
-				"Code": {
-					"ZipFile":  { "Fn::Join": ["\n", [
-						"var response = require('cfn-response');",
-						"exports.handler = function(event, context) {",
-						"    console.log('REQUEST RECEIVED:\\n', JSON.stringify(event));",
-						"    if (event.RequestType == 'Delete') {",
-						"        response.send(event, context, response.SUCCESS);",
-						"        return;",
-						"    }",
-						"    var jsonToParse = event.ResourceProperties.JSON;",
-						"    var responseData = {};",
-						"    if (jsonToParse) {",
-						"        responseData = JSON.parse(jsonToParse);",
-						"        response.send(event, context, response.SUCCESS, responseData);",
-						"    } else {",
-						"        responseData = {Error: 'No JSON was provided to the function'};",
-						"        console.log(responseData.Error);",
-						"        response.send(event, context, response.FAILED, responseData);",
-						"    }",
-						"};"
-					]]}
-				},
-				"Handler": "index.handler",
-				"Runtime": "nodejs4.3",
-				"Timeout": "30",
-				"Role": { "Fn::GetAtt" : ["LER", "Arn"] }
-			}
-		},
-		"AmiLambda": {
-			"Condition": "useLambda",
-			"Type": "Custom::Ami",
-			"DependsOn": [ "BootstrapWaitCondition" ],
-			"Properties": {
-				"ServiceToken": { "Fn::GetAtt" : [ "ExtractAmiId", "Arn" ] },
-				"JSON": { "Fn::GetAtt": [ "BootstrapWaitCondition", "Data" ] }
-			}
-		},
-		"Queue": {
-			"Condition": "useQueue",
-			"DependsOn": [ "BootstrapInstance" ],
-			"Type": "AWS::SQS::Queue",
-			"Properties": {
-				"MessageRetentionPeriod": "3600"
-			}
-		},
-		"QueuePolicy": {
-			"Condition": "useQueue",
-			"Type": "AWS::SQS::QueuePolicy",
-			"Properties": {
-				"PolicyDocument": {
-					"Version": "2008-10-17",
-					"Id": { "Fn::Join": [ "/", [ { "Fn::GetAtt" : [ "Queue", "Arn" ] }, "QueuePolicy" ] ] },
-					"Statement": [
-					{
-						"Sid": "AllowTopicToPublishMessages",
-						"Effect": "Allow",
-						"Principal": { "AWS": "*" },
-						"Action": "sqs:SendMessage",
-						"Resource": { "Fn::GetAtt": [ "Queue", "Arn" ] },
-						"Condition": {
-							"ArnEquals": {
-								"aws:SourceArn": { "Ref": "SnsTopic" }
-							}
-						}
-					}
-					]
-				},
-				"Queues": [ { "Ref": "Queue" } ]
-			}
-		},
-		"SnsTopic": {
-			"Condition": "useQueue",
-			"Type": "AWS::SNS::Topic",
-			"Properties": {
-				"Subscription": [
-				{
-					"Endpoint": { "Fn::GetAtt" : [ "Queue", "Arn" ] },
-					"Protocol" : "sqs"
-				}
-				]
-			}
-		},
-		"AmiQueue": {
-			"Condition": "useQueue",
-			"Type": "Custom::Ami",
-			"Properties": {
-				"ServiceToken": { "Ref": "SnsTopic" },
-				"JSON": { "Fn::GetAtt": [ "BootstrapWaitCondition", "Data" ] }
-			}
-		}
-	},
-	"Outputs": {
-		"AmiId": {
-			"Value": {
-				"Fn::If": [
-					"useLambda",
-					{ "Fn::GetAtt": [ "AmiLambda", "AmiId" ] },
-					{
-						"Fn::If": [
-							"useQueue",
-							{ "Fn::GetAtt": [ "AmiQueue", "AmiId" ] },
-							{ "Ref": "AWS::NoValue" }
-						]
-					}
-				]
-			},
-			"Description": "The resulting AMI created by the stack"
-		}
-	}
-}
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  A self-terminating stack that produces a machine image for a CentOS 7
+  minimal system
+Parameters:
+  BootstrapImage:
+    Description: >-
+      AMI for the bootstrap instance, should be using 'yum' and support
+      'cloud-init' (if empty will use latest Amazon Linux AMI)
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-ebs'
+  BootstrapInstanceType:
+    Description: >-
+      Instance type to use for the bootstrap image
+    Type: String
+    Default: t3.micro
+  BootstrapVolumeSize:
+    Description: >-
+      Size of the bootstrap volume that would be used as for the root filesystem
+      (in GB)
+    Type: Number
+    Default: 8
+    MinValue: 8
+    ConstraintDescription: must be greater than 8 gigabytes
+  VpcId:
+    Type: String
+    Description: >-
+      VPC where the bootstrap instance will be launched.  If you do not specify
+      this parameter you need to ensure that the default security group allows
+      outbound traffic on tcp/80 and tcp/443
+    Default: ''
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: >-
+      Id of the subnet where the bootstrap instance is going to be launched
+      (must have Internet connectivity to download packages!)
+  PreserveStack:
+    Type: String
+    Description: >-
+      Whether this stack should be preserved after generation of the image or
+      not
+    Default: False
+    AllowedValues:
+      - False
+      - True
+    ConstraintDescription: must be either False or True, no other values are accepted
+  KeyName:
+    Type: String
+    Description: >-
+      Key pair name to install on the bootstrap image in case you need to debug
+      the bootstrap process
+    Default: ''
+  BootstrapScriptUrl:
+    Type: String
+    Description: >-
+      An URL of the alternative bootstrap script
+    Default: ''
+  ParentStackId:
+    Type: String
+    Description: >-
+      The ID of the parent stack.  Required if this stack is nested in another
+      stack
+    Default: ''
+  UserData:
+    Type: String
+    Description: >-
+      Additional commands to execute just before the image is going to be
+      created
+    Default: ''
+  UpdateTrigger:
+    Type: String
+    Description: >-
+      Every time this parameter changes the associated stack would go through
+      the CloudFormation update routine, so if you want to regenerate the
+      resulting AMI provide a different value each time you run the stack
+      update
+    Default: ''
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+      - Label:
+          default: Required Configuration
+        Parameters:
+          - SubnetId
+      - Label:
+          default: Optional Configuration
+        Parameters:
+          - VpcId
+          - BootstrapImage
+          - BootstrapInstanceType
+          - BootstrapVolumeSize
+          - BootstrapScriptUrl
+          - UserData
+      - Label:
+          default: Debug / Internal Configuration
+        Parameters:
+          - KeyName
+          - PreserveStack
+          - ParentStackId
+          - UpdateTrigger
+    ParameterLabels:
+      VpcId:
+        default: VPC ID
+      SubnetId:
+        default: SubnetId
+      BootstrapImage:
+        default: Bootstrap AMI
+      BootstrapInstanceType:
+        default: Bootstrap Instance Type
+      BootstrapVolumeSize:
+        default: Bootstrap Volume Size (GB)
+      BootstrapScriptUrl:
+        default: Bootstrap Script URL
+      UserData:
+        default: Additional bootstrap code
+      KeyName:
+        default: SSH Key Name
+      PreserveStack:
+        default: Preserve Created Stack?
+      ParentStackId:
+        default: Parent Stack ID
+      UpdateTrigger:
+        default: Update Trigger
+Conditions:
+  useKeyName: !Not
+    - !Equals
+      - !Ref KeyName
+      - ''
+  useVpcId: !Not
+    - !Equals
+      - !Ref VpcId
+      - ''
+  useParentStackId: !Not
+    - !Equals
+      - !Ref ParentStackId
+      - ''
+Resources:
+  Role:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub '${AWS::StackName}-RolePolicy'
+          PolicyDocument:
+            Statement:
+              - Resource:
+                  - '*'
+                Action:
+                  - cloudformation:DescribeStacks
+                  - ec2:DescribeInstances
+                  - ec2:GetConsoleOutput
+                  - ec2:DescribeVolumes
+                  - ec2:CreateSnapshot
+                  - ec2:DeleteSnapshot
+                  - ec2:DescribeSnapshots
+                  - ec2:DescribeSubnets
+                  - ec2:CreateImage
+                  - ec2:DescribeImages
+                  - ec2:RegisterImage
+                  - ec2:DeregisterImage
+                  - ec2:CreateTags
+                Effect: Allow
+              - Resource:
+                  - !Sub 'arn:aws:ec2:${AWS::Region}::image/*'
+                  - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/*'
+                  - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:volume/*'
+                  - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:network-interface/*'
+                  - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${SubnetId}'
+                  - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/*'
+                  - !If
+                    - useKeyName
+                    - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:key-pair/${KeyName}'
+                    - !Ref 'AWS::NoValue'
+                Action:
+                  - ec2:RunInstances
+                Effect: Allow
+              - Resource:
+                  - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/*'
+                Action:
+                  - ec2:TerminateInstances
+                Condition:
+                  StringEquals:
+                    'ec2:InstanceType':
+                      - !Ref BootstrapInstanceType
+                    'ec2:ResourceTag/purpose':
+                      - build-image
+                Effect: Allow
+              - Resource:
+                  - !Ref 'AWS::StackId'
+                Action:
+                  - cloudformation:GetTemplate
+                  - cloudformation:DeleteStack
+                  - cloudformation:UpdateStack
+                  - cloudformation:DescribeStackResources
+                  - cloudformation:DescribeStackEvents
+                Effect: Allow
+              - Resource:
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:instance-profile/${AWS::StackName}-InstanceProfile-*'
+                Action:
+                  - iam:RemoveRoleFromInstanceProfile
+                  - iam:DeleteInstanceProfile
+                Effect: Allow
+              - Resource:
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AWS::StackName}-Role-*'
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AWS::StackName}-RolePolicy'
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AWS::StackName}-LER-*'
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:role/${AWS::StackName}-LERP'
+                Action:
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:DeleteRole
+                Effect: Allow
+              - Resource:
+                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ExtractAmiId-*'
+                Action:
+                  - lambda:InvokeFunction
+                  - lambda:DeleteFunction
+                Effect: Allow
+              - !If
+                - useParentStackId
+                - Resource:
+                    - !Ref ParentStackId
+                  Action:
+                    - cloudformation:DescribeStackEvents
+                  Effect: Allow
+                - !Ref 'AWS::NoValue'
+              - !If
+                - useVpcId
+                - Resource:
+                    - '*'
+                  Action:
+                    - ec2:CreateSecurityGroup
+                    - ec2:DescribeSecurityGroups
+                  Effect: Allow
+                - !Ref 'AWS::NoValue'
+              - !If
+                - useVpcId
+                - Resource:
+                    - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/*'
+                  Action:
+                    - ec2:DeleteSecurityGroup
+                    - ec2:RevokeSecurityGroupIngress
+                    - ec2:RevokeSecurityGroupEgress
+                    - ec2:AuthorizeSecurityGroupIngress
+                    - ec2:AuthorizeSecurityGroupEgress
+                  Effect: Allow
+                - !Ref 'AWS::NoValue'
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref Role
+  BootstrapSecurityGroup:
+    Condition: useVpcId
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: >-
+        A temporary security group to allow the bootstrap instance retrieve
+        software for the installation purposes
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          FromPort: '-1'
+          ToPort: '-1'
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress: []
+      VpcId: !Ref VpcId
+  BootstrapInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref BootstrapImage
+      InstanceType: !Ref BootstrapInstanceType
+      IamInstanceProfile: !Ref InstanceProfile
+      KeyName: !If
+        - useKeyName
+        - !Ref KeyName
+        - !Ref 'AWS::NoValue'
+      Tags:
+        - Key: Name
+          Value: bootstrap-image
+        - Key: purpose
+          Value: build-image
+      BlockDeviceMappings:
+        - DeviceName: /dev/sdf
+          Ebs:
+            VolumeSize: !Ref BootstrapVolumeSize
+            VolumeType: gp2
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: True
+          DeviceIndex: 0
+          DeleteOnTermination: True
+          SubnetId: !Ref SubnetId
+          GroupSet:
+            - !If
+              - useVpcId
+              - !Ref BootstrapSecurityGroup
+              - !Ref 'AWS::NoValue'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Update stack trigger: ${UpdateTrigger}
+          export AWS_DEFAULT_REGION='${AWS::Region}'
+          export cfnStackId='${AWS::StackId}'
+          export cfnSignalURL='${BootstrapWaitHandle}'
+          [ -n '${ParentStackId}' ] && export cfnParentStackId='${ParentStackId}' || export cfnParentStackId='${AWS::StackId}'
+          [ '${PreserveStack}' == True ] && export PRESERVE_STACK=True || export PRESERVE_STACK="${!cfnStackId#$cfnParentStackId}"
+          set -exu -o pipefail
+          if [ -n '${BootstrapScriptUrl}' ]; then
+            curl -qsS4f --retry 180 --retry-delay 1 '${BootstrapScriptUrl}' -o /root/bootstrap.sh
+          else
+            curl -qsS4f --retry 180 --retry-delay 1 'https://raw.githubusercontent.com/galaxy4public/aws-cloudformation-ami/master/bootstrap/bootstrap.sh' -o /root/bootstrap.sh
+          fi
+          chmod 0700 /root/bootstrap.sh
+          if [ -n '${UserData}' ]; then
+            printf '%s' '${UserData}' > /root/bootstrap-addon.sh
+          fi
+          # Bootstrap it!
+          /root/bootstrap.sh >&2
+  BootstrapWaitHandle:
+    Type: AWS::CloudFormation::WaitConditionHandle
+    Properties: {}
+  BootstrapWaitCondition:
+    Type: AWS::CloudFormation::WaitCondition
+    DependsOn: BootstrapInstance
+    Properties:
+      Handle: !Ref BootstrapWaitHandle
+      Timeout: 4800
+  LER:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: !Sub '${AWS::StackName}-LERP'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group/aws/lambda/${AWS::StackName}-ExtractAmiId-*'
+  ExtractAmiId:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: !Sub |
+          var response = require('cfn-response');
+          exports.handler = function(event, context) {
+            console.log('REQUEST RECEIVED:\n', JSON.stringify(event));
+            if (event.RequestType == 'Delete') {
+              response.send(event, context, response.SUCCESS);
+              return;
+            }
+            var jsonToParse = event.ResourceProperties.JSON;
+            var responseData = {};
+            if (jsonToParse) {
+              responseData = JSON.parse(jsonToParse);
+              response.send(event, context, response.SUCCESS, responseData);
+            } else {
+              responseData = {Error: 'No JSON was provided to the function'};
+              console.log(responseData.Error);
+              response.send(event, context, response.FAILED, responseData);
+            }
+          };
+      Handler: index.handler
+      Runtime: nodejs4.3
+      Timeout: 30
+      Role: !GetAtt
+        - LER
+        - Arn
+  AmiLambda:
+    Type: Custom::Ami
+    DependsOn:
+      - BootstrapWaitCondition
+    Properties:
+      ServiceToken: !GetAtt
+        - ExtractAmiId
+        - Arn
+      JSON: !GetAtt
+        - BootstrapWaitCondition
+        - Data
+Outputs:
+  AmiId:
+    Value: !GetAtt
+      - AmiLambda
+      - AmiId
+    Description: The resulting AMI created by the stack
