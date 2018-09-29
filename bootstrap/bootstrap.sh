@@ -992,7 +992,7 @@ fi
 AMI_ID=$(aws ec2 register-image --output json \
 			--name "build-image-$(date +%Y%m%d%H%M%S)" \
 			--description 'A temporary image to bootstrap the minimal CentOS 7 instance' \
-			--architecture x86_64 --virtualization-type hvm --sriov-net-support simple \
+			--architecture x86_64 --virtualization-type hvm --sriov-net-support simple --ena-support \
 			--root-device-name /dev/xvda --block-device-mappings \
 				"DeviceName=/dev/xvda,Ebs={SnapshotId=$SNAPSHOT_ID,DeleteOnTermination=true}" \
 		| sed -n '/"ImageId"[[:space:]]*:/s,^.*"ImageId"[[:space:]]*:[[:space:]]*"\([[:alnum:]-]\+\)".*$,\1,;T;p;q' \
@@ -1027,11 +1027,12 @@ until [ "$OUTPUT" == 'available' ]; do
 	I=$((I + 1))
 done
 
+INSTANCE_TYPE=$(sed -n 's,.*"instanceType"[[:space:]]*:[[:space:]]*"\([^"]\+\)".*,\1,;T;p' /root/instance-profile | head -1)
 # Launch an instance from the image (we reuse INSTANCE_ID variable here)
 INSTANCE_ID=$(aws ec2 run-instances --output json \
 			--image-id "$AMI_ID" \
 			--no-associate-public-ip-address \
-			--instance-type t2.micro \
+			--instance-type "${INSTANCE_TYPE:-t2.micro}" \
 			--instance-initiated-shutdown-behavior stop \
 			--subnet-id "$SUBNET_ID" \
 		| sed -n '/"InstanceId"[[:space:]]*:/s,^.*"InstanceId"[[:space:]]*:[[:space:]]*"\([[:alnum:]-]\+\)".*$,\1,;T;p;q' \
