@@ -369,7 +369,7 @@ chmod 0600 "$BOOTSTRAP_MNT"/etc/modprobe.d/blacklist.conf
 
 for module in \
 	ata_generic:false \
-	ata_piix4:false \
+	ata_piix:false \
 	binfmt_misc:false \
 	cirrus:true \
 	drm:true \
