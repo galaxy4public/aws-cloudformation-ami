@@ -191,13 +191,6 @@ safe_yum()
 	unset I
 }
 
-cat > "$BOOTSTRAP_MNT"/etc/rpm/macros.local << "__EOF__"
-%_install_langs (none)
-%_netsharedpath %_datadir/locale:%__docdir_path
-%_excludedocs 1
-__EOF__
-chmod 0644 "$BOOTSTRAP_MNT"/etc/rpm/macros.local
-
 safe_yum install \
 	basesystem grub2 kernel dracut e2fsprogs yum \
 	yum-plugin-post-transaction-actions attr patch \
@@ -207,6 +200,13 @@ safe_yum install \
 
 safe_yum remove \
 	initscripts systemd-sysv
+
+cat > "$BOOTSTRAP_MNT"/etc/rpm/macros.local << "__EOF__"
+%_install_langs (none)
+%_netsharedpath %_datadir/locale:%__docdir_path
+%_excludedocs 1
+__EOF__
+chmod 0644 "$BOOTSTRAP_MNT"/etc/rpm/macros.local
 
 SCRIPT_CHECKSUM=$(sha256sum "${BASH_SOURCE[0]}" | cut -f1 -d' ')
 DISTRO_RELEASE=$(chroot "$BOOTSTRAP_MNT" /bin/sh -c "rpm -q centos-release | sed -n 's,^centos-release-\([[:digit:].-]\+\)\.el.*,\1,;T;s,-,.,;p'")
