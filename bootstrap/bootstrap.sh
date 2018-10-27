@@ -522,17 +522,13 @@ initscripts_required_error ()
 	exit 1
 }
 
-alias systemctl_redirect=initscripts_required_error
-alias daemon=initscripts_required_error
-alias success=true
-alias failure=true
-alias passed=true
-alias warning=true
-
-action ()
-{
-	"$@"
-}
+systemctl_redirect() { initscripts_required_error; }
+daemon() { initscripts_required_error; }
+success() { return; }
+failure() { return; }
+passed() { return; }
+warning() { return; }
+action () { "$@"; }
 __EOF__
 chmod 0644 "$BOOTSTRAP_MNT"/etc/rc.d/init.d/functions
 chown -h root:root "$BOOTSTRAP_MNT"/etc/rc.d/init.d/functions
