@@ -1,3 +1,4 @@
+# vim:set ft=yaml ts=2 sts=2 sw=2 et:
 AWSTemplateFormatVersion: 2010-09-09
 Description: >-
   A self-terminating stack that produces a machine image for a CentOS 7
@@ -75,6 +76,12 @@ Parameters:
       resulting AMI provide a different value each time you run the stack
       update
     Default: ''
+  S3Bucket:
+    Type: String
+    Description: >-
+      An S3 bucket name (possibly with the path) from where the bootstrap
+      scripts would be allowed to retrieve objects
+    Default: ''
 Metadata:
   'AWS::CloudFormation::Interface':
     ParameterGroups:
@@ -133,6 +140,10 @@ Conditions:
   useParentStackId: !Not
     - !Equals
       - !Ref ParentStackId
+      - ''
+  useS3Bucket: !Not
+    - !Equals
+      - !Ref S3Bucket
       - ''
 Resources:
   Role:
@@ -251,6 +262,14 @@ Resources:
                     - ec2:RevokeSecurityGroupEgress
                     - ec2:AuthorizeSecurityGroupIngress
                     - ec2:AuthorizeSecurityGroupEgress
+                  Effect: Allow
+                - !Ref 'AWS::NoValue'
+              - !If
+                - useS3Bucket
+                - Resource:
+                    - !Sub 'arn:aws:s3:::${S3Bucket}/*'
+                  Action:
+                    - s3:GetObject
                   Effect: Allow
                 - !Ref 'AWS::NoValue'
   InstanceProfile:

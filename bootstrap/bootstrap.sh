@@ -5,7 +5,7 @@ AWS_TIMEOUT=30 # minutes (in reality no operation should take more than 10)
 
 LC_ALL=C
 LANG=C
-export LC_ALL LANG
+export BOOTSTRAP_MNT LC_ALL LANG
 
 if [ -n "$cfnSignalURL" ]; then
 	error_handler()
@@ -170,27 +170,26 @@ mknod -m 0666 "$BOOTSTRAP_MNT"/dev/zero c 1 5
 mknod -m 0666 "$BOOTSTRAP_MNT"/dev/random c 1 8
 mknod -m 0666 "$BOOTSTRAP_MNT"/dev/urandom c 1 9
 
-# Sometimes we hit a bad mirror and yum fails with a timeout message, so
-# let's try three times
-I=0
-until yum -y --noplugins -c /root/yum.conf \
-		--disablerepo=* --enablerepo=base,updates \
-		--installroot="$BOOTSTRAP_MNT" \
-		install \
-			basesystem grub2 kernel dracut e2fsprogs yum \
-			yum-plugin-post-transaction-actions attr patch \
-			dhclient openssh-server selinux-policy-targeted \
-			less vim-minimal policycoreutils-python audit
-do
-	RC=$?
-	if [ $I -ge 2 ]; then
-		echo "ERROR: cannot install OS, yum failed 3 times with error code '$RC'!" >&2
-		exit $RC
-	fi
-	echo "NOTICE: yum failed with error code '$RC', re-trying ..." >&2
-	I=$(( I + 1 ))
-done
-unset I
+safe_yum()
+{
+	# Sometimes we hit a bad mirror and yum fails with a timeout message, so
+	# let's try three times
+	I=0
+	until yum -y --noplugins -c /root/yum.conf \
+			--disablerepo=* --enablerepo=base,updates \
+			--installroot="$BOOTSTRAP_MNT" \
+			"$@"
+	do
+		RC=$?
+		if [ $I -ge 2 ]; then
+			echo "ERROR: yum failed 3 times with error code '$RC'!" >&2
+			exit $RC
+		fi
+		echo "NOTICE: yum failed with error code '$RC', re-trying ..." >&2
+		I=$(( I + 1 ))
+	done
+	unset I
+}
 
 cat > "$BOOTSTRAP_MNT"/etc/rpm/macros.local << "__EOF__"
 %_install_langs (none)
@@ -198,6 +197,16 @@ cat > "$BOOTSTRAP_MNT"/etc/rpm/macros.local << "__EOF__"
 %_excludedocs 1
 __EOF__
 chmod 0644 "$BOOTSTRAP_MNT"/etc/rpm/macros.local
+
+safe_yum install \
+	basesystem grub2 kernel dracut e2fsprogs yum \
+	yum-plugin-post-transaction-actions attr patch \
+	dhclient openssh-server selinux-policy-targeted \
+	less vim-minimal policycoreutils-python audit \
+	systemd-networkd
+
+safe_yum remove \
+	initscripts systemd-sysv
 
 SCRIPT_CHECKSUM=$(sha256sum "${BASH_SOURCE[0]}" | cut -f1 -d' ')
 DISTRO_RELEASE=$(chroot "$BOOTSTRAP_MNT" /bin/sh -c "rpm -q centos-release | sed -n 's,^centos-release-\([[:digit:].-]\+\)\.el.*,\1,;T;s,-,.,;p'")
@@ -314,44 +323,21 @@ chmod 0644 "$BOOTSTRAP_MNT"/etc/fstab
 unset DEVICE_ID
 unset FS_UUID
 
-cat > "$BOOTSTRAP_MNT"/etc/sysconfig/network << "__EOF__"
-NETWORKING=yes
-HOSTNAME=localhost.localdomain
-NOZEROCONF=yes
-NETWORKING_IPV6=no
-IPV6INIT=no
-IPV6_ROUTER=no
-IPV6_AUTOCONF=no
-IPV6FORWARDING=no
-IPV6TO4INIT=no
-IPV6_CONTROL_RADVD=no
-__EOF__
-chmod 0644 "$BOOTSTRAP_MNT"/etc/sysconfig/network
+install -d -m0755 -o "$BOOTSTRAP_MNT"/etc/systemd/network
+cat > "$BOOTSTRAP_MNT"/etc/systemd/network/zzz-default.network << "__EOF__"
+[Network]
+DHCP=yes
 
-cat > "$BOOTSTRAP_MNT"/etc/sysconfig/network-scripts/ifcfg-eth0 << "__EOF__"
-DEVICE=eth0
-NAME=eth0
-ONBOOT=yes
-BOOTPROTO=dhcp
-PERSISTENT_DHCLIENT=1
-NM_CONTROLLED=no
-TYPE=Ethernet
-DEFROUTE=yes
-PEERDNS=yes
-PEERROUTES=yes
-IPV4_FAILURE_FATAL=yes
-IPV6INIT=yes
-IPV6_AUTOCONF=yes
-IPV6_DEFROUTE=yes
-IPV6_PEERDNS=yes
-IPV6_PEERROUTES=yes
-IPV6_FAILURE_FATAL=no
+[DHCP]
+UseMTU=true
+UseDomains=true
+UseHostname=false
 __EOF__
-chmod 0644 "$BOOTSTRAP_MNT"/etc/sysconfig/network-scripts/ifcfg-eth0
+chmod 0644 "$BOOTSTRAP_MNT"/etc/systemd/network/zzz-default.network
 
 # grub configuration
 cat > "$BOOTSTRAP_MNT"/etc/default/grub << "__EOF__"
-GRUB_CMDLINE_LINUX="crashkernel=auto console=tty0 console=ttyS0 net.ifnames=0 biosdevname=0 ipv6.disable=1 modprobe.blacklist=pcspkr,i2c_piix4 nousb audit=1 quiet"
+GRUB_CMDLINE_LINUX="crashkernel=auto console=tty0 console=ttyS0 nousb audit=1 quiet"
 GRUB_TIMEOUT=30
 __EOF__
 chmod 0600 "$BOOTSTRAP_MNT"/etc/default/grub
@@ -376,7 +362,6 @@ for module in \
 	drm_kms_helper:true \
 	floppy:false \
 	i2c_core:true \
-	ipv6:false \
 	libata:false \
 	parport:false \
 	parport_pc:false \
@@ -550,7 +535,7 @@ if ! TMPFILE=$(mktemp "$EC2_USERDATA_ENV.XXXXXXXXXX"); then
 fi
 
 # The following will extract variables from the EC2 user-data.  It also does some
-# sanitisation of the lines (i.e. exctract lines which look like a variable, where
+# sanitisation of the lines (i.e. extract lines which look like a variable, where
 # name of the variable is alpha-numeric and can contain '_' and where the value is
 # allowed to have alpha-numeric and space characters intermixed with selected set
 # of punctuation characters (no '$', '`', or '>' are allowed)

@@ -47,14 +47,14 @@ VpcId                 | String  |    No    | ""         | VPC where the bootstra
 PreserveStack         | Boolean |    No    | "False"    | Whether this stack should be preserved after generation of the image or not (this should be used for debug purposes only)
 ParentStackId         | String  |    No    | ""         | The ID of the parent stack.  Required if this stack is nested in another stack
 UpdateTrigger         | String  |    No    | ""         | Every time this parameter changes the associated stack would go through CloudFormation update routine, so if you want to regenerate the resulting AMI provide a different value each time you run the stack update
+S3Bucket              | String  |    No    | ""         | An S3 bucket name (possibly with the trailing path) from where bootstrap script would be able to retrieve objects using AWS CLI or API calls
 
 Description
 -----------
 
 The template generates an Amazon image using another AMI as a bootstrap
-instance.  By default it uses a hardcoded list of Amazon Linux AMI
-(AMIs defined for all Amazon Regions) and that hardcoded default will
-be used if no BootstrapImage parameter is provided to the stack.
+instance.  By default it uses the latest of Amazon Linux AMI for the
+region if no BootstrapImage parameter is provided to the stack.
 
 In order to perform the installation of the operating system the
 bootstrap instance needs Internet access.  Due to limitations of the
