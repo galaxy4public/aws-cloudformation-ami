@@ -338,7 +338,7 @@ chmod 0644 "$BOOTSTRAP_MNT"/etc/systemd/network/zzz-default.network
 # grub configuration
 cat > "$BOOTSTRAP_MNT"/etc/default/grub << "__EOF__"
 GRUB_CMDLINE_LINUX="crashkernel=auto console=tty0 console=ttyS0 nousb audit=1 quiet"
-GRUB_TIMEOUT=30
+GRUB_HIDDEN_TIMEOUT=0
 __EOF__
 chmod 0600 "$BOOTSTRAP_MNT"/etc/default/grub
 
