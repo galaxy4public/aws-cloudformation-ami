@@ -21,7 +21,7 @@ if [ -n "$cfnSignalURL" ]; then
 			[ $I -gt 1 ] && ERROR_CHAIN="$ERROR_CHAIN < " ||:
 		done
 		[ "$CHAIN_SIZE" == 0 -a -z "$ERROR_CHAIN" ] && ERROR_CHAIN="line $LINENO" ||:
-		curl -X PUT -H 'Content-Type: application/json' \
+		curl -X PUT -H 'Content-Type:' \
 			--data-binary '{ "Status": "FAILURE", "Reason": "Bootstrap FAILED at '"$ERROR_CHAIN"'", "UniqueId": "Log", "Data": "Failure" }' "$cfnSignalURL"; \
 		exit $RC
 	}
@@ -1331,7 +1331,7 @@ fi
 
 # Signal the stack that we created the AMI and provide the AMI ID back
 if [ -n "$cfnSignalURL" ]; then
-	curl -X PUT -H 'Content-Type: application/json' \
+	curl -X PUT -H 'Content-Type:' \
 		--data-binary '{"Status" : "SUCCESS","Reason" : "Bootstrap was successful","UniqueId" : "AmiId", "Data" : "'"$AMI_ID"'"}' "$cfnSignalURL"
 	trap - ERR HUP INT QUIT TERM KILL ABRT SEGV EXIT
 fi
