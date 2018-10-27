@@ -78,6 +78,7 @@ until dd "if=${TARGET_VOL}${P:-}1" of=/dev/null bs=1 count=1 >/dev/null 2>/dev/n
 	sleep 1;
 	I=$((I + 1))
 done
+unset I
 
 mkfs -F -t ext4 -E lazy_itable_init=0,lazy_journal_init=0 -M / -q \
 	"${TARGET_VOL}${P:-}1"
@@ -365,7 +366,7 @@ for module in \
 	drm_kms_helper:true \
 	floppy:false \
 	i2c_core:true \
-	i2c_piix4:false
+	i2c_piix4:false \
 	libata:false \
 	parport:false \
 	parport_pc:false \
