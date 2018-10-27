@@ -69,7 +69,7 @@ unit: sectors
 __EOF__
 
 I=0
-until [ -e "${TARGET_VOL}${P:-}1" ]; do
+until dd "if=${TARGET_VOL}${P:-}1" of=/dev/null bs=1 count=1 >/dev/null 2>/dev/null ; do
 	# if we don't get the device in 3 minutes, bail out
 	if [ $I -ge 180 ]; then
 		echo "ERROR: failed to acquire '${TARGET_VOL}${P:-}1'!" >&2
