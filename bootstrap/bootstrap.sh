@@ -339,6 +339,20 @@ chmod 0644 "$BOOTSTRAP_MNT"/etc/systemd/network/zzz-default.network
 # configure systemd-resolved (once CentOS 7 gets an updated systemd we
 # need to use stub-resolv.conf instead here)
 ln -sf /run/systemd/resolve/resolv.conf "$BOOTSTRAP_MNT"/etc/resolv.conf
+# are you ready for some sed magic? :) This inserts 'resolve' after
+# 'files' in the 'hosts:' line if 'resolve' was not there.
+sed -i '/^[[:space:]]*hosts:/{
+	H
+	s/^[[:space:]]*hosts:[[:space:]]*//
+	s/resolve//g
+	/files/s/files/files resolve/
+	/files/!s/^/resolve /
+	s/[[:space:]]\+/ /g
+	x
+	s/^\([[:space:]]*hosts:[[:space:]]*\).*/\1/
+	G
+	s/\n//g
+}' "$BOOTSTRAP_MNT"/etc/nsswitch.conf
 
 # grub configuration
 cat > "$BOOTSTRAP_MNT"/etc/default/grub << "__EOF__"
