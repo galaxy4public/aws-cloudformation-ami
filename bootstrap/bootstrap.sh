@@ -21,7 +21,7 @@ if [ -n "$cfnSignalURL" ]; then
 			[ $I -gt 1 ] && ERROR_CHAIN="$ERROR_CHAIN < " ||:
 		done
 		[ "$CHAIN_SIZE" == 0 -a -z "$ERROR_CHAIN" ] && ERROR_CHAIN="line $LINENO" ||:
-		curl -X PUT -H 'Content-Type:' \
+		curl -X PUT -H 'Content-Type: application/json' \
 			--data-binary '{\"Status\":\"FAILURE\",\"Reason\":\"Bootstrap FAILED at '"$ERROR_CHAIN"'\",\"UniqueId\":\"Log\",\"Data\":\"Failure\"}' "$cfnSignalURL"; \
 		exit $RC
 	}
@@ -845,14 +845,6 @@ __EOF__
 
 chroot "$BOOTSTRAP_MNT" /bin/sh /usr/local/sbin/apply-etc-patches.sh
 
-cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/dhcp/dhclient-exit-hooks
-# Ensure that no matter what umask is in force we create the world-readable
-# /etc/resolv.conf file (otherwise non-privileged users would not be able
-# to resolve names)
-[ -f /etc/resolv.conf ] && chmod 0644 /etc/resolv.conf
-__EOF__
-chmod 0755 "$BOOTSTRAP_MNT"/etc/dhcp/dhclient-exit-hooks
-
 # SELinux customisations
 mkdir -m700 "$BOOTSTRAP_MNT"/root/policies
 cat << "__EOF__" > "$BOOTSTRAP_MNT"/root/policies/initd2user.te
@@ -1267,7 +1259,7 @@ fi
 
 # Signal the stack that we created the AMI and provide the AMI ID back
 if [ -n "$cfnSignalURL" ]; then
-	curl -X PUT -H 'Content-Type:' \
+	curl -X PUT -H 'Content-Type: application/json' \
 		--data-binary '{"Status" : "SUCCESS","Reason" : "Bootstrap was successful","UniqueId" : "AmiId", "Data" : "'"$AMI_ID"'"}' "$cfnSignalURL"
 	trap - ERR HUP INT QUIT TERM KILL ABRT SEGV EXIT
 fi
