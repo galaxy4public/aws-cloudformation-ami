@@ -433,6 +433,78 @@ LC_MESSAGES=C
 __EOF__
 chmod 0644 "$BOOTSTRAP_MNT"/etc/locale.conf
 
+# CentOS 7 is still transitioning from initscripts to systemd.  Therefore,
+# if we get rid of the initscripts package we lose the autorelabeling
+# functionality.  This means that we have to create our own facility.
+cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/systemd/system/autorelabel.service
+[Unit]
+Description=Relabel all filesystems, if necessary
+DefaultDependencies=no
+Requires=local-fs.target
+Conflicts=shutdown.target
+After=local-fs.target
+Before=sysinit.target shutdown.target
+ConditionSecurity=selinux
+ConditionKernelCommandLine=|autorelabel
+ConditionPathExists=|/.autorelabel
+
+[Service]
+ExecStart=/usr/local/sbin/autorelabel
+Type=oneshot
+TimeoutSec=0
+RemainAfterExit=yes
+StandardInput=tty
+
+[Install]
+WantedBy=sysinit.target
+__EOF__
+chmod 0644 "$BOOTSTRAP_MNT"/etc/systemd/system/autorelabel.service
+chown -h root:root "$BOOTSTRAP_MNT"/etc/systemd/system/autorelabel.service
+
+cat << "__EOF__" > "$BOOTSTRAP_MNT"/usr/local/sbin/autorelabel
+#!/bin/bash
+#
+# Do automatic relabelling
+#
+
+relabel_selinux() {
+    # if /sbin/init is not labeled correctly this process is running in the
+    # wrong context, so a reboot will be required after relabel
+    AUTORELABEL=
+    . /etc/selinux/config
+    echo 0 > /sys/fs/selinux/enforce
+
+    if [ "$AUTORELABEL" = 0 ]; then
+	echo
+	echo $"*** Warning -- SELinux ${SELINUXTYPE} policy relabel is required. "
+	echo $"*** /etc/selinux/config indicates you want to manually fix labeling"
+	echo $"*** problems. Dropping you to a shell; the system will reboot"
+	echo $"*** when you leave the shell."
+	sulogin
+
+    else
+	echo
+	echo $"*** Warning -- SELinux ${SELINUXTYPE} policy relabel is required."
+	echo $"*** Relabeling could take a very long time, depending on file"
+	echo $"*** system size and speed of hard drives."
+
+	FORCE=$(</.autorelabel)
+        [ -x "/usr/sbin/quotaoff" ] && /usr/sbin/quotaoff -aug
+	/sbin/fixfiles $FORCE restore > /dev/null 2>&1
+    fi
+    rm -f  /.autorelabel
+    /usr/lib/dracut/dracut-initramfs-restore
+    sync
+    systemctl --force reboot
+}
+
+restorecon $(awk '!/^#/ && $4 !~ /noauto/ && $2 ~ /^\// { print $2 }' /etc/fstab) >/dev/null 2>&1
+relabel_selinux
+__EOF__
+chmod 0700 "$BOOTSTRAP_MNT"/usr/local/sbin/autorelabel
+chown -h root:root "$BOOTSTRAP_MNT"/usr/local/sbin/autorelabel
+chroot "$BOOTSTRAP_MNT" systemctl enable autorelabel.service
+
 # cleanup service (this is to be launched on the initial bootstrap of the instance)
 cat > "$BOOTSTRAP_MNT"/root/cleanup.sh << "__EOF__"
 #!/bin/bash
