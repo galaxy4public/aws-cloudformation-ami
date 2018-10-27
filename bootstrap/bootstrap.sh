@@ -196,7 +196,7 @@ safe_yum install \
 	yum-plugin-post-transaction-actions attr patch \
 	dhclient openssh-server selinux-policy-targeted \
 	less vim-minimal policycoreutils-python audit \
-	systemd-networkd
+	systemd-networkd systemd-resolved
 
 safe_yum remove \
 	initscripts systemd-sysv
@@ -335,6 +335,9 @@ UseHostname=false
 __EOF__
 chmod 0644 "$BOOTSTRAP_MNT"/etc/systemd/network/zzz-default.network
 
+# configure systemd-resolved
+ln -sf /run/systemd/resolve/stub-resolv.conf "$BOOTSTRAP_MNT"/etc/resolv.conf
+
 # grub configuration
 cat > "$BOOTSTRAP_MNT"/etc/default/grub << "__EOF__"
 GRUB_CMDLINE_LINUX="crashkernel=auto console=tty0 console=ttyS0 nousb audit=1 quiet"
@@ -362,10 +365,12 @@ for module in \
 	drm_kms_helper:true \
 	floppy:false \
 	i2c_core:true \
+	i2c_piix4:false
 	libata:false \
 	parport:false \
 	parport_pc:false \
 	pata_acpi:false \
+	pcspkr:false \
 	serio_raw:false \
 	snd:true \
 	snd_pcm:true \
@@ -504,6 +509,31 @@ __EOF__
 chmod 0700 "$BOOTSTRAP_MNT"/usr/local/sbin/autorelabel
 chown -h root:root "$BOOTSTRAP_MNT"/usr/local/sbin/autorelabel
 chroot "$BOOTSTRAP_MNT" systemctl enable autorelabel.service
+
+# A nice touch for a initscript-less system :)
+cat << "__EOF__" > /etc/rc.d/init.d/functions
+# If you are looking inside this file, most likely you need to install
+# the initscripts package, e.g. "yum -y install initscripts"
+initscripts_required_error ()
+{
+	echo "Please install the initscripts package if this functionality is required!" >&2
+	exit 1
+}
+
+alias systemctl_redirect=initscripts_required_error
+alias daemon=initscripts_required_error
+alias success=true
+alias failure=true
+alias passed=true
+alias warning=true
+
+action ()
+{
+	"$@"
+}
+__EOF__
+chmod 0644 /etc/rc.d/init.d/functions
+chown -h root:root /etc/rc.d/init.d/functions
 
 # cleanup service (this is to be launched on the initial bootstrap of the instance)
 cat > "$BOOTSTRAP_MNT"/root/cleanup.sh << "__EOF__"
