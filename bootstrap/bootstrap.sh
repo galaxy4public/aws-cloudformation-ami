@@ -282,7 +282,7 @@ if [ -z "$SUBNET_ID" -o -n "${SUBNET_ID//[[:alnum:]-]}" ]; then
 	exit 1
 fi
 
-if [ -n "${PRESERVE_STACK:-}" -a "${PRESERVE_STACK:-}" != 'True' ]; then
+if [ -n "${PRESERVE_STACK:-}" -a -n "${PRESERVE_STACK/[Tt][Rr][Uu][Ee]}" ]; then
 	# We may need the VPC id if we are a part of a nested stack structure
 	VPC_ID=$(aws ec2 describe-instances --output json \
 				--instance-ids "$INSTANCE_ID" \
@@ -1455,7 +1455,7 @@ fi
 if [ -z "${PRESERVE_STACK:-}" ]; then
 	# OK, now we remove the stack
 	aws cloudformation delete-stack --stack-name "$cfnStackId" ||:
-elif [ "${PRESERVE_STACK:-}" = 'True' ]; then
+elif [ -z "${PRESERVE_STACK/[Tt][Rr][Uu][Ee]}" ]; then
 	# The user asked us to preserve the whole stack, so no more work here
 	exit 0
 else
