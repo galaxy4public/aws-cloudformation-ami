@@ -330,7 +330,7 @@ Resources:
           export cfnStackId='${AWS::StackId}'
           export cfnSignalURL='${BootstrapWaitHandle}'
           [ -n '${ParentStackId}' ] && export cfnParentStackId='${ParentStackId}' || export cfnParentStackId='${AWS::StackId}'
-          [ '${PreserveStack}' == True ] && export PRESERVE_STACK=True || export PRESERVE_STACK="${!cfnStackId#$cfnParentStackId}"
+          [ "$(printf '%s' '${PreserveStack}' | tr '[[:upper:]]' '[[:lower:]]')" == true ] && export PRESERVE_STACK=true || export PRESERVE_STACK="${!cfnStackId#$cfnParentStackId}"
           set -exu -o pipefail
           if [ -n '${BootstrapScriptUrl}' ]; then
             curl -qsS4f --retry 180 --retry-delay 1 '${BootstrapScriptUrl}' -o /root/bootstrap.sh
