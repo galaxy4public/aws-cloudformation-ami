@@ -728,7 +728,7 @@ curl -qsS4f --retry 900 --retry-delay 1 'https://raw.githubusercontent.com/galax
 chmod 0644 "$BOOTSTRAP_MNT"/usr/lib/yum-plugins/at-exit.py
 
 # Apply the check-sugid policies
-chroot "$BOOTSTRAP_MNT" /bin/sh -c "grep ':update:' /etc/yum/post-actions/check-sugid.action | grep -vE '^\s*#' | cut -f3- -d':' | sh -x"
+chroot "$BOOTSTRAP_MNT" /bin/sh -c "grep ':update:' /etc/yum/post-actions/check-sugid.action | grep -vE '^\s*#' | cut -f3- -d':' | sh -x" ||:
 
 cat << "__EOF__" > "$BOOTSTRAP_MNT"/usr/local/sbin/apply-etc-patches.sh
 #!/bin/sh -e
