@@ -512,7 +512,7 @@ chown -h root:root "$BOOTSTRAP_MNT"/usr/local/sbin/autorelabel
 chroot "$BOOTSTRAP_MNT" systemctl enable autorelabel.service
 
 # A nice touch for a initscript-less system :)
-cat << "__EOF__" > /etc/rc.d/init.d/functions
+cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/rc.d/init.d/functions
 # If you are looking inside this file, most likely you need to install
 # the initscripts package, e.g. "yum -y install initscripts"
 initscripts_required_error ()
@@ -533,8 +533,8 @@ action ()
 	"$@"
 }
 __EOF__
-chmod 0644 /etc/rc.d/init.d/functions
-chown -h root:root /etc/rc.d/init.d/functions
+chmod 0644 "$BOOTSTRAP_MNT"/etc/rc.d/init.d/functions
+chown -h root:root "$BOOTSTRAP_MNT"/etc/rc.d/init.d/functions
 
 # cleanup service (this is to be launched on the initial bootstrap of the instance)
 cat > "$BOOTSTRAP_MNT"/root/cleanup.sh << "__EOF__"
