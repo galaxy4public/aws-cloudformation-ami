@@ -323,7 +323,7 @@ chmod 0644 "$BOOTSTRAP_MNT"/etc/fstab
 unset DEVICE_ID
 unset FS_UUID
 
-install -d -m0755 -o "$BOOTSTRAP_MNT"/etc/systemd/network
+install -d -m0755 -o root -g root "$BOOTSTRAP_MNT"/etc/systemd/network
 cat > "$BOOTSTRAP_MNT"/etc/systemd/network/zzz-default.network << "__EOF__"
 [Network]
 DHCP=yes
