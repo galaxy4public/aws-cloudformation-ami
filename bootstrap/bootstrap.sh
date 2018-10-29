@@ -617,11 +617,10 @@ chmod 0644 "$BOOTSTRAP_MNT"/etc/systemd/system/template-cleanup.service
 
 cat > "$BOOTSTRAP_MNT"/etc/systemd/system/authorize-ssh-key.service << "__EOF__"
 [Unit]
-Description="EC2 SSH Key Installer"
+Description=EC2 SSH Key Installer
 Documentation=https://none
 Wants=network-online.target
 After=network-online.target
-ConditionVirtualization=xen
 
 [Service]
 Type=simple
@@ -685,11 +684,11 @@ chmod 0700 "$BOOTSTRAP_MNT"/usr/local/sbin/ec2-user-data-extract-vars.sh
 
 cat > "$BOOTSTRAP_MNT"/etc/systemd/system/ec2-user-data.service << "__EOF__"
 [Unit]
-Description="EC2 user-data retriever"
+Description=EC2 user-data retriever
 Documentation=https://none
 Wants=network-online.target
 After=network-online.target
-ConditionVirtualization=xen
+ConditionVirtualization=vm
 
 [Service]
 Type=oneshot
@@ -713,11 +712,11 @@ chmod 0700 "$BOOTSTRAP_MNT"/usr/local/sbin/ec2-bootstrap.sh
 
 cat > "$BOOTSTRAP_MNT"/etc/systemd/system/ec2-bootstrap.service << "__EOF__"
 [Unit]
-Description="EC2 Bootstrapping script"
+Description=EC2 Bootstrapping script
 Documentation=https://none
 Requires=ec2-user-data.service
 After=ec2-user-data.service
-ConditionVirtualization=xen
+ConditionVirtualization=vm
 
 [Service]
 Type=oneshot
