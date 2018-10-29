@@ -197,7 +197,7 @@ safe_yum install \
 	yum-plugin-post-transaction-actions attr patch \
 	dhclient openssh-server selinux-policy-targeted \
 	less vim-minimal policycoreutils-python audit \
-	systemd-networkd systemd-resolved
+	systemd-networkd systemd-resolved haveged
 
 safe_yum remove \
 	initscripts systemd-sysv
@@ -328,6 +328,7 @@ install -d -m0755 -o root -g root "$BOOTSTRAP_MNT"/etc/systemd/network
 cat > "$BOOTSTRAP_MNT"/etc/systemd/network/zzz-default.network << "__EOF__"
 [Network]
 DHCP=yes
+LLMNR=no
 
 [DHCP]
 UseMTU=true
@@ -730,6 +731,8 @@ __EOF__
 chmod 0644 "$BOOTSTRAP_MNT"/etc/systemd/system/ec2-bootstrap.service
 ln -s /etc/systemd/system/ec2-bootstrap.service "$BOOTSTRAP_MNT"/etc/systemd/system/multi-user.target.wants/
 
+chroot "$BOOTSTRAP_MNT" systemctl enable haveged.service
+
 # Security
 
 printf '\n# Set sane umask for the init process\numask 027' >> "$BOOTSTRAP_MNT"/etc/sysconfig/init
@@ -988,6 +991,20 @@ require {
 }
 
 dontaudit daemon kernel_t:system module_request;
+__EOF__
+
+cat << "__EOF__" > "$BOOTSTRAP_MNT"/root/policies/systemd_resolved.te
+# Allow daemons to communicate with resolved over the DBUS interface
+module systemd_resolved 1.0;
+
+require {
+	type systemd_resolved_t;
+	attribute daemon;
+	class dbus send_msg;
+}
+
+allow daemon systemd_resolved_t:dbus send_msg;
+allow systemd_resolved_t daemon:dbus send_msg;
 __EOF__
 
 chmod 0600 "$BOOTSTRAP_MNT"/root/policies/*.te
