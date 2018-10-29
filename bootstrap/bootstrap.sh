@@ -346,9 +346,9 @@ ln -sf /run/systemd/resolve/resolv.conf "$BOOTSTRAP_MNT"/etc/resolv.conf
 sed -i '/^[[:space:]]*hosts:/{
 	H
 	s/^[[:space:]]*hosts:[[:space:]]*//
-	s/resolve//g
-	/files/s/files/files resolve/
-	/files/!s/^/resolve /
+	s/resolve\([[:space:]]*\[!UNAVAIL=return\]\)*//g
+	/files/s/files/files resolve [!UNAVAIL=return] /
+	/files/!s/^/resolve [!UNAVAIL=return] /
 	s/[[:space:]]\+/ /g
 	x
 	s/^\([[:space:]]*hosts:[[:space:]]*\).*/\1/
