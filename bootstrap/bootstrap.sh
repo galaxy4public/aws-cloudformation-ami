@@ -197,7 +197,7 @@ safe_yum install \
 	yum-plugin-post-transaction-actions attr patch \
 	dhclient openssh-server selinux-policy-targeted \
 	less vim-minimal policycoreutils-python audit \
-	systemd-networkd systemd-resolved haveged
+	systemd-networkd systemd-resolved
 
 safe_yum remove \
 	initscripts systemd-sysv
@@ -730,8 +730,6 @@ WantedBy=multi-user.target
 __EOF__
 chmod 0644 "$BOOTSTRAP_MNT"/etc/systemd/system/ec2-bootstrap.service
 ln -s /etc/systemd/system/ec2-bootstrap.service "$BOOTSTRAP_MNT"/etc/systemd/system/multi-user.target.wants/
-
-chroot "$BOOTSTRAP_MNT" systemctl enable haveged.service
 
 # Security
 
