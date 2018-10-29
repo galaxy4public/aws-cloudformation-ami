@@ -82,6 +82,11 @@ Parameters:
       An S3 bucket name (possibly with the path) from where the bootstrap
       scripts would be allowed to retrieve objects
     Default: ''
+  AmiName:
+    Type: String
+    Description: >-
+      Specifies the Name tag associated with the created AMI.
+    Default: ''
 Metadata:
   'AWS::CloudFormation::Interface':
     ParameterGroups:
@@ -329,6 +334,7 @@ Resources:
           export AWS_DEFAULT_REGION='${AWS::Region}'
           export cfnStackId='${AWS::StackId}'
           export cfnSignalURL='${BootstrapWaitHandle}'
+          export AMI_NAME_TAG='${AmiName}'
           [ -n '${ParentStackId}' ] && export cfnParentStackId='${ParentStackId}' || export cfnParentStackId='${AWS::StackId}'
           [ "$(printf '%s' '${PreserveStack}' | tr '[[:upper:]]' '[[:lower:]]')" == true ] && export PRESERVE_STACK=true || export PRESERVE_STACK="${!cfnStackId#$cfnParentStackId}"
           set -exu -o pipefail
@@ -339,7 +345,8 @@ Resources:
           fi
           chmod 0700 /root/bootstrap.sh
           if [ -n '${UserData}' ]; then
-            printf '%s' '${UserData}' > /root/bootstrap-addon.sh
+            mkdir -p -m700 /root/bootstrap.d
+            printf '%s' '${UserData}' > /root/bootstrap.d/99-custom-user-data.sh
           fi
           # Bootstrap it!
           /root/bootstrap.sh >&2

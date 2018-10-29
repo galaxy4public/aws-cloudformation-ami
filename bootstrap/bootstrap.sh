@@ -1,5 +1,6 @@
 #!/bin/bash
-TARGET_VOL="${1:-}"
+TARGET_VOL="${TARGET_VOL:-}"
+AMI_NAME_TAG="${AMI_NAME_TAG:-}"
 BOOTSTRAP_MNT="/mnt/bootstrap"
 AWS_TIMEOUT=30 # minutes (in reality no operation should take more than 10)
 
@@ -39,7 +40,7 @@ if ! ping -q -c 3 8.8.8.8 >/dev/null ; then
 	exit 1
 fi
 
-if [ -z "$TARGET_VOL" ]; then
+if [ -z "${TARGET_VOL:-}" ]; then
 	# No target volume has been specified, let's try to guess.
 	if [ -b /dev/nvme1n1 ]; then
 		# we are running on a new type of instances where EBS
@@ -1276,10 +1277,12 @@ fi
 # Be nice to people who are looking at the resources
 aws ec2 create-tags --resources "$SNAPSHOT_ID" --tags "Key=Name,Value=AMI: $AMI_ID"
 aws ec2 create-tags --resources "$AMI_ID" --tags \
+	${AMI_NAME_TAG:+"Key=Name,Value=$AMI_NAME_TAG"} \
 	"Key=image/distro,Value=CentOS" \
 	"Key=image/distro/release,Value=$DISTRO_RELEASE" \
 	"Key=image/checksum,Value=$IMAGE_CHECKSUM" \
-	"Key=image/checksum/script,Value=$SCRIPT_CHECKSUM"
+	"Key=image/checksum/script,Value=$SCRIPT_CHECKSUM" \
+	"Key=created-by,Value=$cfnStackId"
 
 # Wait for the image to be available
 OUTPUT=
