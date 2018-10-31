@@ -420,7 +420,13 @@ chroot "$BOOTSTRAP_MNT" /bin/sh -ec '\
 	[ -n "$INITRAMFS" -a -n "$KVERS" ] && \
 	dracut --strip --prelink --hardlink --ro-mnt --stdlog 3 --no-hostonly --drivers "xen-blkfront nvme ext4 mbcache jbd2" --force --verbose --show-modules --printsize "$INITRAMFS" "$KVERS" \
 '
-chroot "$BOOTSTRAP_MNT" systemctl mask proc-sys-fs-binfmt_misc.{auto,}mount
+chroot "$BOOTSTRAP_MNT" /bin/bash -excu -c "
+	systemctl mask proc-sys-fs-binfmt_misc.{auto,}mount --no-reload
+	systemctl add-wants systemd-resolved nss-lookup.target --no-reload
+	mkdir -m755 /etc/systemd/system/systemd-resolved.before
+	ln -s /usr/lib/systemd/system/network-online.target /etc/systemd/system/systemd-resolved.before/
+	ln -s /usr/lib/systemd/system/nss-lookup.target /etc/systemd/system/systemd-resolved.before/
+"
 
 # Setup a custom root user
 mkdir -m0 "$BOOTSTRAP_MNT"/root/.users
