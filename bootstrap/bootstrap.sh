@@ -422,7 +422,9 @@ chroot "$BOOTSTRAP_MNT" /bin/sh -ec '\
 '
 chroot "$BOOTSTRAP_MNT" /bin/bash -excu -c "
 	systemctl mask proc-sys-fs-binfmt_misc.{auto,}mount --no-reload
-	systemctl add-wants systemd-resolved nss-lookup.target --no-reload
+	mkdir -m755 /etc/systemd/system/systemd-resolved.wants
+	ln -s /usr/lib/systemd/system/network-online.target /etc/systemd/system/systemd-resolved.wants/
+	ln -s /usr/lib/systemd/system/nss-lookup.target /etc/systemd/system/systemd-resolved.wants/
 	mkdir -m755 /etc/systemd/system/systemd-resolved.before
 	ln -s /usr/lib/systemd/system/network-online.target /etc/systemd/system/systemd-resolved.before/
 	ln -s /usr/lib/systemd/system/nss-lookup.target /etc/systemd/system/systemd-resolved.before/
