@@ -739,6 +739,40 @@ __EOF__
 chmod 0644 "$BOOTSTRAP_MNT"/etc/systemd/system/ec2-bootstrap.service
 ln -s /etc/systemd/system/ec2-bootstrap.service "$BOOTSTRAP_MNT"/etc/systemd/system/multi-user.target.wants/
 
+cat > "$BOOTSTRAP_MNT"/usr/local/sbin/ec2-hostname.sh << "__EOF__"
+#!/bin/sh
+
+set -eu -o pipefail
+
+EC2_METADATA_URL='http://169.254.169.254/latest/meta-data/local-hostname'
+
+if ! OUTPUT=$(curl -qsS4f --retry 120 --retry-delay 1 "$EC2_METADATA_URL"); then
+        RC=$?
+        exit $RC
+fi
+
+hostnamectl set-hostname "$OUTPUT"
+__EOF__
+chmod 0700 "$BOOTSTRAP_MNT"/usr/local/sbin/ec2-hostname.sh
+
+cat > "$BOOTSTRAP_MNT"/etc/systemd/system/ec2-hostname.service << "__EOF__"
+[Unit]
+Description=EC2 hostname setter
+Documentation=https://none
+Wants=network-online.target
+After=network-online.target
+ConditionVirtualization=vm
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ec2-hostname.sh
+
+[Install]
+WantedBy=multi-user.target
+__EOF__
+chmod 0644 "$BOOTSTRAP_MNT"/etc/systemd/system/ec2-hostname.service
+ln -s /etc/systemd/system/ec2-hostname.service "$BOOTSTRAP_MNT"/etc/systemd/system/multi-user.target.wants/
+
 # Security
 
 printf '\n# Set sane umask for the init process\numask 027' >> "$BOOTSTRAP_MNT"/etc/sysconfig/init
@@ -1006,11 +1040,13 @@ module systemd_resolved 1.0;
 require {
 	type systemd_resolved_t;
 	attribute daemon;
+	attribute dbusd_unconfined;
 	class dbus send_msg;
 }
 
 allow daemon systemd_resolved_t:dbus send_msg;
 allow systemd_resolved_t daemon:dbus send_msg;
+allow systemd_resolved_t dbusd_unconfined:dbus send_msg;
 __EOF__
 
 chmod 0600 "$BOOTSTRAP_MNT"/root/policies/*.te
