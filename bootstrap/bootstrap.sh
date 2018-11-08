@@ -422,8 +422,9 @@ chroot "$BOOTSTRAP_MNT" /bin/sh -ec '\
 '
 chroot "$BOOTSTRAP_MNT" /bin/bash -excu -c "
 	systemctl mask proc-sys-fs-binfmt_misc.{auto,}mount --no-reload
+	systemctl enable systemd-networkd-wait-online.service --no-reload
+	ln -s /usr/lib/systemd/system/systemd-resolved.service /etc/systemd/system/network-online.target.wants/
 	mkdir -m755 /etc/systemd/system/systemd-resolved.wants
-	ln -s /usr/lib/systemd/system/network-online.target /etc/systemd/system/systemd-resolved.wants/
 	ln -s /usr/lib/systemd/system/nss-lookup.target /etc/systemd/system/systemd-resolved.wants/
 	mkdir -m755 /etc/systemd/system/systemd-resolved.before
 	ln -s /usr/lib/systemd/system/network-online.target /etc/systemd/system/systemd-resolved.before/
@@ -628,7 +629,7 @@ cat > "$BOOTSTRAP_MNT"/etc/systemd/system/authorize-ssh-key.service << "__EOF__"
 [Unit]
 Description=EC2 SSH Key Installer
 Documentation=https://none
-Wants=network-online.target
+Requires=network-online.target
 After=network-online.target
 
 [Service]
@@ -695,7 +696,7 @@ cat > "$BOOTSTRAP_MNT"/etc/systemd/system/ec2-user-data.service << "__EOF__"
 [Unit]
 Description=EC2 user-data retriever
 Documentation=https://none
-Wants=network-online.target
+Requires=network-online.target
 After=network-online.target
 ConditionVirtualization=vm
 
@@ -759,7 +760,7 @@ cat > "$BOOTSTRAP_MNT"/etc/systemd/system/ec2-hostname.service << "__EOF__"
 [Unit]
 Description=EC2 hostname setter
 Documentation=https://none
-Wants=network-online.target
+Requires=network-online.target
 After=network-online.target
 ConditionVirtualization=vm
 
