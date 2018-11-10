@@ -356,6 +356,38 @@ sed -i '/^[[:space:]]*hosts:/{
 	s/\n//g
 }' "$BOOTSTRAP_MNT"/etc/nsswitch.conf
 
+cat > "$BOOTSTRAP_MNT"/usr/local/sbin/systemd-resolved-wait-online.sh << "__EOF__"
+#!/bin/sh
+TARGET="${1:-root-servers.net}"
+QTYPE="${2:-SOA}"
+while :
+do
+	/usr/lib/systemd/systemd-resolve-host "${TARGET%.}." -t "$QTYPE" >/dev/null 2>&1 && break ||:
+	sleep 1
+done
+__EOF__
+chmod 0700 "$BOOTSTRAP_MNT"/usr/local/sbin/systemd-resolved-wait-online.sh
+
+cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/systemd/system/systemd-resolved-wait-online.service
+[Unit]
+Description=Wait for Resolver to be Configured
+Documentation=https://none
+DefaultDependencies=no
+Conflicts=shutdown.target
+Requisite=systemd-resolved.service
+After=systemd-resolved.service
+Before=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/systemd-resolved-wait-online.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=network-online.target
+__EOF__
+chmod 0644 "$BOOTSTRAP_MNT"/etc/systemd/system/systemd-resolved-wait-online.service
+
 # grub configuration
 cat > "$BOOTSTRAP_MNT"/etc/default/grub << "__EOF__"
 GRUB_CMDLINE_LINUX="crashkernel=auto console=tty0 console=ttyS0 modprobe.blacklist=i2c_piix4 nousb audit=1 quiet"
