@@ -421,7 +421,7 @@ chroot "$BOOTSTRAP_MNT" /bin/sh -ec '\
 	dracut --strip --prelink --hardlink --ro-mnt --stdlog 3 --no-hostonly --drivers "xen-blkfront nvme ext4 mbcache jbd2" --force --verbose --show-modules --printsize "$INITRAMFS" "$KVERS" \
 '
 chroot "$BOOTSTRAP_MNT" /bin/bash -excu -c "
-	systemctl mask proc-sys-fs-binfmt_misc.{auto,}mount --no-reload
+	systemctl mask proc-sys-fs-binfmt_misc.{auto,}mount systemd-binfmt.service --no-reload
 	systemctl enable systemd-networkd-wait-online.service --no-reload
 	ln -s /usr/lib/systemd/system/systemd-resolved.service /etc/systemd/system/network-online.target.wants/
 	mkdir -m755 /etc/systemd/system/systemd-resolved.wants
