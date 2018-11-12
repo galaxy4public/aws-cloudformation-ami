@@ -799,6 +799,7 @@ ConditionVirtualization=vm
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/ec2-hostname.sh
+RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
