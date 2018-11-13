@@ -1337,14 +1337,29 @@ until [ "$OUTPUT" == 'completed' ]; do
 done
 
 # Register an image
-AMI_ID=$(aws ec2 register-image --output json \
+if ! AMI_ID=$(aws ec2 register-image --output json \
 		--name "build-image-$(date +%Y%m%d%H%M%S)-$(tr -dc '[:alnum:]' < /dev/urandom | head -c8)" \
 			--description 'A minimal CentOS 7 image' \
 			--architecture x86_64 --virtualization-type hvm --sriov-net-support simple --ena-support \
 			--root-device-name /dev/xvda --block-device-mappings \
 				"DeviceName=/dev/xvda,Ebs={SnapshotId=$SNAPSHOT_ID,DeleteOnTermination=true}" \
 		| sed -n '/"ImageId"[[:space:]]*:/s,^.*"ImageId"[[:space:]]*:[[:space:]]*"\([[:alnum:]-]\+\)".*$,\1,;T;p;q' \
-)
+); then
+	echo 'ERROR: failed to register the final AMI created from the snapshot!' >&2
+	if [ -z "${PRESERVE_STACK:-}" ]; then
+		# Terminate the newly created instance
+		if ! OUTPUT=$(aws ec2 terminate-instances --instance-ids "$INSTANCE_ID"); then
+			echo 'ERROR: (failure cleanup) aws ec2 terminate-instances was abnormally terminated!' >&2
+		fi
+
+		# Remove the snapshot
+		if ! OUTPUT=$(aws ec2 delete-snapshot --snapshot-id "$SNAPSHOT_ID"); then
+			echo 'ERROR: (failure cleanup) aws ec2 delete-snapshot was abnormally terminated!' >&2
+		fi
+
+		exit 1
+	fi
+fi
 
 # Sanity check
 if [ -z "$AMI_ID" -o -n "${AMI_ID//[[:alnum:]-]}" ]; then
