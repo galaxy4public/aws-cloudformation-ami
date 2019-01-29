@@ -408,7 +408,7 @@ Resources:
             }
           };
       Handler: index.handler
-      Runtime: nodejs4.3
+      Runtime: nodejs8.10
       Timeout: 30
       Role: !GetAtt
         - LER
