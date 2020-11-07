@@ -113,7 +113,7 @@ mknod -m 0666 "$BOOTSTRAP_MNT"/dev/urandom c 1 9
 # Preparations for kernel package installation -- we are going to use
 # SYSLINUX as a bootloader, so grubby won't help here.
 mkdir -p -m755 "$BOOTSTRAP_MNT"/etc{,/kernel,/kernel/install.d}
-cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/kernel/install.d/10-ec2-kernel.sh
+cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/kernel/install.d/10-ec2-kernel.install
 #!/bin/bash
 
 COMMAND="$1"
@@ -127,9 +127,10 @@ KERNEL="vmlinuz-$KERNEL_VERSION"
 if [ "$COMMAND" == 'add' ]; then
 	ln -sf "$INITRD" /boot/initrd.img
 	ln -sf "$KERNEL" /boot/vmlinuz
+	exit 77
 fi
 __EOF__
-chmod 0700 "$BOOTSTRAP_MNT"/etc/kernel/install.d/10-ec2-kernel.sh
+chmod 0700 "$BOOTSTRAP_MNT"/etc/kernel/install.d/10-ec2-kernel.install
 
 mkdir -p -m755 "$BOOTSTRAP_MNT"/etc/rpm
 cat > "$BOOTSTRAP_MNT"/etc/rpm/macros.local << "__EOF__"
