@@ -140,6 +140,7 @@ mknod -m 0666 "$BOOTSTRAP_MNT"/dev/urandom c 1 9
 
 # Preparations for kernel package installation -- we are going to use
 # SYSLINUX as a bootloader, so grubby won't help here.
+mkdir -p -m755 "$BOOTSTRAP_MNT"/etc{,/kernel,/kernel/install.d}
 cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/kernel/install.d/10-ec2-kernel.sh
 #!/bin/bash
 
@@ -155,6 +156,7 @@ if [ "$COMMAND" == 'add' ]; then
 	ln -sf "$KERNEL_IMAGE" /boot/
 fi
 __EOF__
+chmod 0700 "$BOOTSTRAP_MNT"/etc/kernel/install.d/10-ec2-kernel.sh
 
 safe_dnf()
 {
