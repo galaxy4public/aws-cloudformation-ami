@@ -158,14 +158,24 @@ fi
 __EOF__
 chmod 0700 "$BOOTSTRAP_MNT"/etc/kernel/install.d/10-ec2-kernel.sh
 
-safe_dnf()
+HOST_PMGR=dnf
+if ! which "$HOST_PMGR" >/dev/null 2>&1 ; then
+	HOST_PMGR=yum
+	if ! which "$HOST_PMGR" >/dev/null 2>&1 ; then
+		echo 'ERROR: could not find neither "yum" nor "dnf", cannot continue!'
+		exit 1
+	fi
+fi
+
+pkgmanager()
 {
 	# Sometimes we hit a bad mirror and dnf fails with a timeout message, so
 	# let's try three times
 	I=0
-	until dnf -y -c /root/dnf.conf \
+	until "$HOST_PMGR" -y -c /root/dnf.conf \
 			--noplugins \
 			--disablerepo=* --enablerepo=base \
+			--installroot="$BOOTSTRAP_MNT" \
 			--releasever=8 \
 			"$@"
 	do
@@ -180,7 +190,7 @@ safe_dnf()
 	unset I
 }
 
-safe_dnf install \
+pkgmanager install \
 	basesystem kernel syslinux-extlinux dracut e2fsprogs dnf \
 	attr patch \
 	openssh-server selinux-policy-targeted \
@@ -190,7 +200,7 @@ safe_dnf install \
 # Unfortunately, RedHat is pushing for their NetworkManager everywhere and they dropped
 # systemd-networkd from their repositories (See: https://bugzilla.redhat.com/show_bug.cgi?id=1650342)
 # Luckily, we are not alone and EPEL picked it up and provides the package.
-safe_dnf install \
+pkgmanager install \
 	systemd-networkd
 
 cat > "$BOOTSTRAP_MNT"/etc/rpm/macros.local << "__EOF__"
