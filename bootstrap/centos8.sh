@@ -888,7 +888,7 @@ __EOF__
 chmod 0700 "$BOOTSTRAP_MNT"/usr/local/sbin/apply-etc-patches.sh
 
 mkdir -m700 "$BOOTSTRAP_MNT"/etc/patches
-if false
+if false; then
 cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/patches/bashrc.diff
 --- etc/bashrc.centos	2016-11-05 17:19:35.000000000 +0000
 +++ etc/bashrc	2017-03-20 02:59:33.608000000 +0000
