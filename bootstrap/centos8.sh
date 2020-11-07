@@ -113,7 +113,7 @@ reposdir=/dev/null
 assumeyes=1
 logdir=/dev/null
 pluginconfpath=/dev/null
-plugins=o
+plugins=0
 releasever=8
 varsdir=/dev/null
 
