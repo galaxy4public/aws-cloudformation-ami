@@ -55,35 +55,7 @@ if [ -z "${TARGET_VOL:-}" ]; then
 	fi
 fi
 
-# Since we may work with either NVMe or legacy block devices we need to
-# accomodate for their different naming conventions.
-#P=''
-#[ "${TARGET_VOL:0:9}" == /dev/nvme ] && P=p || :
-
-# This is an optional but very nice to have step (the downside is it takes time)
-##dd if=/dev/zero of="$TARGET_VOL" bs=100M || :
-
-#sfdisk "$TARGET_VOL" << "__EOF__"
-#unit: sectors
-#
-#2048,,83,*
-#__EOF__
-#
-#I=0
-#until dd "if=${TARGET_VOL}${P:-}1" of=/dev/null bs=1 count=1 >/dev/null 2>/dev/null ; do
-#	# if we don't get the device in 3 minutes, bail out
-#	if [ $I -ge 180 ]; then
-#		echo "ERROR: failed to acquire '${TARGET_VOL}${P:-}1'!" >&2
-#		exit 1
-#	fi
-#	sleep 1;
-#	I=$((I + 1))
-#done
-#unset I
-#
-#sleep 5 # rarely, mkfs cannot find the partition even though dd have seen it
 mkfs -F -t ext4 -E lazy_itable_init=0,lazy_journal_init=0 -M / -q "${TARGET_VOL}"
-#${P:-}1"
 
 # We are using tune2fs and sed here so we do not introduce additional
 # dependencies on blkid and grep for no particular reason
@@ -176,6 +148,9 @@ if ! which "$HOST_PMGR" >/dev/null 2>&1 ; then
 	fi
 fi
 
+# Create /var/log so we could preserve the output
+mkdir -p -m755 "$BOOTSTRAP_MNT"/var/log
+
 pkgmanager()
 {
 	# Sometimes we hit a bad mirror and dnf fails with a timeout message, so
@@ -186,7 +161,7 @@ pkgmanager()
 			--disablerepo=* --enablerepo=base \
 			--installroot="$BOOTSTRAP_MNT" \
 			--releasever=8 \
-			"$@"
+			"$@" | tee -a "$BOOTSTRAP_MNT"/var/log/bootstrap.log
 	do
 		RC=$?
 		if [ $I -ge 2 ]; then
@@ -410,6 +385,10 @@ LABEL CentOS
   APPEND root=$DEVICE_ID ro crashkernel=auto console=tty0 console=ttyS0 modprobe.blacklist=i2c_piix4 nousb audit=1 quiet
 __EOF__
 chroot "$BOOTSTRAP_MNT" extlinux --install /boot/extlinux
+
+# XXX: temporary hack
+ln -sf vmlinuz-4.18.0-193.28.1.el8_2.x86_64 "$BOOTSTRAP_MNT"/boot/vmlinuz
+ln -sf initramfs-4.18.0-193.28.1.el8_2.x86_64.img "$BOOTSTRAP_MNT"/boot/initrd.img
 
 cat << __EOF__ > "$BOOTSTRAP_MNT"/etc/modprobe.d/blacklist.conf
 # The following list of blacklisted modules ensures that irrelevant to AWS EC2
