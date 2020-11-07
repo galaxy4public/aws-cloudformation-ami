@@ -204,6 +204,10 @@ pkgmanager install \
 	openssh-server selinux-policy-targeted \
 	less vim-minimal policycoreutils-python-utils audit \
 
+# Make chrooting inside more comfortable
+for mnt in /dev /proc /sys ; do
+	mount "$mnt" "$BOOTSTRAP_MNT$mnt" --rbind --make-rprivate
+done
 # Unfortunately, RedHat is pushing for their NetworkManager everywhere and they dropped
 # systemd-networkd from their repositories (See: https://bugzilla.redhat.com/show_bug.cgi?id=1650342)
 # Luckily, we are not alone and EPEL picked it up and provides the package.
@@ -447,9 +451,6 @@ for module in \
 __EOF__
 done
 
-for mnt in /dev /proc /sys ; do
-	mount "$mnt" "$BOOTSTRAP_MNT$mnt" --rbind --make-rprivate
-done
 > "$BOOTSTRAP_MNT"/etc/machine-id
 chmod 0644 "$BOOTSTRAP_MNT"/etc/machine-id
 rm -f "$BOOTSTRAP_MNT"/boot/initramfs-*.img
