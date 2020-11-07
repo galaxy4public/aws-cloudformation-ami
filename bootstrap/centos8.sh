@@ -57,43 +57,43 @@ fi
 
 # Since we may work with either NVMe or legacy block devices we need to
 # accomodate for their different naming conventions.
-P=''
-[ "${TARGET_VOL:0:9}" == /dev/nvme ] && P=p || :
+#P=''
+#[ "${TARGET_VOL:0:9}" == /dev/nvme ] && P=p || :
 
 # This is an optional but very nice to have step (the downside is it takes time)
-#dd if=/dev/zero of="$TARGET_VOL" bs=100M || :
+##dd if=/dev/zero of="$TARGET_VOL" bs=100M || :
 
-sfdisk "$TARGET_VOL" << "__EOF__"
-unit: sectors
-
-2048,,83,*
-__EOF__
-
-I=0
-until dd "if=${TARGET_VOL}${P:-}1" of=/dev/null bs=1 count=1 >/dev/null 2>/dev/null ; do
-	# if we don't get the device in 3 minutes, bail out
-	if [ $I -ge 180 ]; then
-		echo "ERROR: failed to acquire '${TARGET_VOL}${P:-}1'!" >&2
-		exit 1
-	fi
-	sleep 1;
-	I=$((I + 1))
-done
-unset I
-
-sleep 5 # rarely, mkfs cannot find the partition even though dd have seen it
-mkfs -F -t ext4 -E lazy_itable_init=0,lazy_journal_init=0 -M / -q \
-	"${TARGET_VOL}${P:-}1"
+#sfdisk "$TARGET_VOL" << "__EOF__"
+#unit: sectors
+#
+#2048,,83,*
+#__EOF__
+#
+#I=0
+#until dd "if=${TARGET_VOL}${P:-}1" of=/dev/null bs=1 count=1 >/dev/null 2>/dev/null ; do
+#	# if we don't get the device in 3 minutes, bail out
+#	if [ $I -ge 180 ]; then
+#		echo "ERROR: failed to acquire '${TARGET_VOL}${P:-}1'!" >&2
+#		exit 1
+#	fi
+#	sleep 1;
+#	I=$((I + 1))
+#done
+#unset I
+#
+#sleep 5 # rarely, mkfs cannot find the partition even though dd have seen it
+mkfs -F -t ext4 -E lazy_itable_init=0,lazy_journal_init=0 -M / -q "${TARGET_VOL}"
+#${P:-}1"
 
 # We are using tune2fs and sed here so we do not introduce additional
 # dependencies on blkid and grep for no particular reason
-FS_UUID=$(tune2fs -l "${TARGET_VOL}${P:-}1" \
+FS_UUID=$(tune2fs -l "${TARGET_VOL}" \
 	| sed -n 's,^\s*Filesystem\s\+UUID:\s*\([a-f0-9-]\+\),\1,;T;p' \
 	| tail -1 \
 )
 
 mkdir -p -m0 "$BOOTSTRAP_MNT"
-mount "${TARGET_VOL}${P:-}1" "$BOOTSTRAP_MNT"
+mount "${TARGET_VOL}" "$BOOTSTRAP_MNT"
 touch "$BOOTSTRAP_MNT"/.autorelabel
 
 # Download the official signing key of CentOS (it _must_ be over HTTPS)
@@ -409,7 +409,7 @@ LABEL CentOS
   INITRD /boot/initrd.img
   APPEND root=$DEVICE_ID ro crashkernel=auto console=tty0 console=ttyS0 modprobe.blacklist=i2c_piix4 nousb audit=1 quiet
 __EOF__
-chroot "$BOOTSTRAP_MNT" extlinux --install --stupid /boot/extlinux
+chroot "$BOOTSTRAP_MNT" extlinux --install /boot/extlinux
 
 cat << __EOF__ > "$BOOTSTRAP_MNT"/etc/modprobe.d/blacklist.conf
 # The following list of blacklisted modules ensures that irrelevant to AWS EC2
@@ -1067,7 +1067,7 @@ fi
 # Snapshot the volume
 SNAPSHOT_ID=$(aws ec2 create-snapshot --output json \
 			--volume-id "$VOLUME_ID" \
-			--description "CentOS 7 minimal bootstrap root volume snapshot" \
+			--description "CentOS 8 minimal bootstrap root volume snapshot" \
 		| sed -n '/"SnapshotId"[[:space:]]*:/s,^.*"SnapshotId"[[:space:]]*:[[:space:]]*"\([[:alnum:]-]\+\)".*$,\1,;T;p;q' \
 )
 
@@ -1113,7 +1113,7 @@ fi
 # Register an image
 AMI_ID=$(aws ec2 register-image --output json \
 		--name "build-image-$(date +%Y%m%d%H%M%S)-$(tr -dc '[:alnum:]' < /dev/urandom | head -c8)" \
-			--description 'A temporary image to bootstrap the minimal CentOS 7 instance' \
+			--description 'A temporary image to bootstrap the minimal CentOS 8 instance' \
 			--architecture x86_64 --virtualization-type hvm --sriov-net-support simple --ena-support \
 			--root-device-name /dev/xvda --block-device-mappings \
 				"DeviceName=/dev/xvda,Ebs={SnapshotId=$SNAPSHOT_ID,DeleteOnTermination=true}" \
@@ -1154,7 +1154,7 @@ INSTANCE_TYPE=$(sed -n 's,.*"instanceType"[[:space:]]*:[[:space:]]*"\([^"]\+\)".
 INSTANCE_ID=$(aws ec2 run-instances --output json \
 			--image-id "$AMI_ID" \
 			--no-associate-public-ip-address \
-			--instance-type "${INSTANCE_TYPE:-t2.micro}" \
+			--instance-type "${INSTANCE_TYPE:-t3.micro}" \
 			--instance-initiated-shutdown-behavior stop \
 			--subnet-id "$SUBNET_ID" \
 		| sed -n '/"InstanceId"[[:space:]]*:/s,^.*"InstanceId"[[:space:]]*:[[:space:]]*"\([[:alnum:]-]\+\)".*$,\1,;T;p;q' \
