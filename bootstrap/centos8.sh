@@ -68,7 +68,6 @@ unit: sectors
 
 2048,,83,*
 __EOF__
-sync
 
 I=0
 until dd "if=${TARGET_VOL}${P:-}1" of=/dev/null bs=1 count=1 >/dev/null 2>/dev/null ; do
@@ -82,6 +81,7 @@ until dd "if=${TARGET_VOL}${P:-}1" of=/dev/null bs=1 count=1 >/dev/null 2>/dev/n
 done
 unset I
 
+sleep 5 # rarely, mkfs cannot find the partition even though dd have seen it
 mkfs -F -t ext4 -E lazy_itable_init=0,lazy_journal_init=0 -M / -q \
 	"${TARGET_VOL}${P:-}1"
 
