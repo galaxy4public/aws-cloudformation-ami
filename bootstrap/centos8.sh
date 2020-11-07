@@ -104,19 +104,18 @@ cat > /root/dnf.conf << __EOF__
 [main]
 gpgcheck=1
 installonly_limit=3
-best=True
+best=1
 install_weak_deps=False
 tsflags=nodocs
 installroot=$BOOTSTRAP_MNT
 cachedir=/root/cache
 reposdir=/dev/null
-assumeyes=True
+assumeyes=1
 logdir=/dev/null
 pluginconfpath=/dev/null
-plugins=False
+plugins=o
 releasever=8
 varsdir=/dev/null
-deltarpm=False
 
 [base]
 name=CentOS-\$releasever - Base
