@@ -158,6 +158,14 @@ fi
 __EOF__
 chmod 0700 "$BOOTSTRAP_MNT"/etc/kernel/install.d/10-ec2-kernel.sh
 
+mkdir -p -m755 "$BOOTSTRAP_MNT"/etc/rpm
+cat > "$BOOTSTRAP_MNT"/etc/rpm/macros.local << "__EOF__"
+%_install_langs (none)
+%_netsharedpath %_datadir/locale:%__docdir_path
+%_excludedocs 1
+__EOF__
+chmod 0644 "$BOOTSTRAP_MNT"/etc/rpm/macros.local
+
 HOST_PMGR=dnf
 if ! which "$HOST_PMGR" >/dev/null 2>&1 ; then
 	HOST_PMGR=yum
@@ -195,20 +203,12 @@ pkgmanager install \
 	attr patch \
 	openssh-server selinux-policy-targeted \
 	less vim-minimal policycoreutils-python-utils audit \
-	epel-release
 
 # Unfortunately, RedHat is pushing for their NetworkManager everywhere and they dropped
 # systemd-networkd from their repositories (See: https://bugzilla.redhat.com/show_bug.cgi?id=1650342)
 # Luckily, we are not alone and EPEL picked it up and provides the package.
-pkgmanager install \
-	systemd-networkd
-
-cat > "$BOOTSTRAP_MNT"/etc/rpm/macros.local << "__EOF__"
-%_install_langs (none)
-%_netsharedpath %_datadir/locale:%__docdir_path
-%_excludedocs 1
-__EOF__
-chmod 0644 "$BOOTSTRAP_MNT"/etc/rpm/macros.local
+chroot "$BOOTSTRAP_MNT" dnf -y install epel-release
+chroot "$BOOTSTRAP_MNT" dnf -y install systemd-networkd
 
 SCRIPT_CHECKSUM=$(sha256sum "${BASH_SOURCE[0]}" | cut -f1 -d' ')
 DISTRO_RELEASE=$(chroot "$BOOTSTRAP_MNT" /bin/sh -c "rpm -q centos-release | sed -n 's,^centos-release-\([[:digit:].-]\+\)\.el.*,\1,;T;s,-,.,;p'")
