@@ -68,6 +68,7 @@ unit: sectors
 
 2048,,83,*
 __EOF__
+sync
 
 I=0
 until dd "if=${TARGET_VOL}${P:-}1" of=/dev/null bs=1 count=1 >/dev/null 2>/dev/null ; do
