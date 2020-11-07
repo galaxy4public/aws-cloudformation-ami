@@ -10,10 +10,14 @@ such a way that it can be used as a nested stack and the output of the
 template could be used to specify the image ID for resources that require
 such an ID.
 
-The primary focus is to create a CentOS 7 minimal installation AMI with
-additional security tightening applied.  However, once this is done the
-goal is to create an extensible framework so any distribution could be
-easily added.
+The primary focus was to create a CentOS 7 minimal installation AMI with
+additional security tightening applied.  However, since then the template
+was enhanced to handle additional OSes via separate bootstrap scripts.
+
+Currently, the following OSes are supported:
+
+  - CentOS 7 (default target)
+  - CentOS 8
 
 The use case for this template is to unbind templates from the hardcoded
 dependency on the AMI IDs.  It is also a useful reference for some
@@ -48,6 +52,7 @@ PreserveStack         | Boolean |    No    | "False"    | Whether this stack sho
 ParentStackId         | String  |    No    | ""         | The ID of the parent stack.  Required if this stack is nested in another stack
 UpdateTrigger         | String  |    No    | ""         | Every time this parameter changes the associated stack would go through CloudFormation update routine, so if you want to regenerate the resulting AMI provide a different value each time you run the stack update
 S3Bucket              | String  |    No    | ""         | An S3 bucket name (possibly with the trailing path) from where bootstrap script would be able to retrieve objects using AWS CLI or API calls
+TargetOS              | String  |    No    | "centos7"  | The target operating system this stack is going to package into an AMI
 
 Description
 -----------

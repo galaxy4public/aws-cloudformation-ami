@@ -1,13 +1,13 @@
 # vim:set ft=yaml ts=2 sts=2 sw=2 et:
 AWSTemplateFormatVersion: 2010-09-09
 Description: >-
-  A self-terminating stack that produces a machine image for a CentOS 7
+  A self-terminating stack that produces a machine image for a CentOS 8
   minimal system
 Parameters:
   BootstrapImage:
     Description: >-
-      AMI for the bootstrap instance, should be using 'yum' and support
-      'cloud-init' (if empty will use latest Amazon Linux AMI)
+      AMI for the bootstrap instance, should be using 'rpm' and support
+      'cloud-init' (if empty will use latest Amazon Linux 2 AMI)
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-ebs'
   BootstrapInstanceType:
@@ -87,6 +87,15 @@ Parameters:
     Description: >-
       Specifies the Name tag associated with the created AMI.
     Default: ''
+  TargetOS:
+    Type: String
+    Description: >-
+      The target OS this stack is going to build AMI for.
+    Default: centos7
+    AllowedValues:
+      - centos7
+      - centos8
+    ConstraintDescription: must be from a list of supported OSes
 Metadata:
   'AWS::CloudFormation::Interface':
     ParameterGroups:
@@ -341,7 +350,7 @@ Resources:
           if [ -n '${BootstrapScriptUrl}' ]; then
             curl -qsS4f --retry 180 --retry-delay 1 '${BootstrapScriptUrl}' -o /root/bootstrap.sh
           else
-            curl -qsS4f --retry 180 --retry-delay 1 'https://raw.githubusercontent.com/galaxy4public/aws-cloudformation-ami/master/bootstrap/bootstrap.sh' -o /root/bootstrap.sh
+            curl -qsS4f --retry 180 --retry-delay 1 'https://raw.githubusercontent.com/galaxy4public/aws-cloudformation-ami/master/bootstrap/${TargetOS}.sh' -o /root/bootstrap.sh
           fi
           chmod 0700 /root/bootstrap.sh
           if [ -n '${UserData}' ]; then
@@ -389,26 +398,20 @@ Resources:
     Properties:
       Code:
         ZipFile: !Sub |
-          var response = require('cfn-response');
-          exports.handler = function(event, context) {
-            console.log('REQUEST RECEIVED:\n', JSON.stringify(event));
-            if (event.RequestType == 'Delete') {
-              response.send(event, context, response.SUCCESS);
-              return;
-            }
-            var jsonToParse = event.ResourceProperties.JSON;
-            var responseData = {};
-            if (jsonToParse) {
-              responseData = JSON.parse(jsonToParse);
-              response.send(event, context, response.SUCCESS, responseData);
-            } else {
-              responseData = {Error: 'No JSON was provided to the function'};
-              console.log(responseData.Error);
-              response.send(event, context, response.FAILED, responseData);
-            }
-          };
+          import cfnresponse
+
+          def handler(event, context):
+            print("Received request:\n", json.dumps(event))
+            if event["RequestType"] == 'Delete':
+              return cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+            try:
+              import json
+              reponseData = json.loads(event["ResourceProperties"]["JSON"])
+            except Exception as e:
+              return cfnresponse.send(event, context, cfnresponse.FAILED, { Error: '{}'.format(e) })
+            return cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
       Handler: index.handler
-      Runtime: nodejs8.10
+      Runtime: python3.8
       Timeout: 30
       Role: !GetAtt
         - LER
