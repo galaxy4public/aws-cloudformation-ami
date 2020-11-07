@@ -207,8 +207,10 @@ pkgmanager install \
 # Unfortunately, RedHat is pushing for their NetworkManager everywhere and they dropped
 # systemd-networkd from their repositories (See: https://bugzilla.redhat.com/show_bug.cgi?id=1650342)
 # Luckily, we are not alone and EPEL picked it up and provides the package.
+cat /etc/resolv.conf > "$BOOTSTRAP_MNT"/etc/resolv.conf
 chroot "$BOOTSTRAP_MNT" dnf -y install epel-release
 chroot "$BOOTSTRAP_MNT" dnf -y install systemd-networkd
+rm "$BOOTSTRAP_MNT"/etc/resolv.conf
 
 SCRIPT_CHECKSUM=$(sha256sum "${BASH_SOURCE[0]}" | cut -f1 -d' ')
 DISTRO_RELEASE=$(chroot "$BOOTSTRAP_MNT" /bin/sh -c "rpm -q centos-release | sed -n 's,^centos-release-\([[:digit:].-]\+\)\.el.*,\1,;T;s,-,.,;p'")
