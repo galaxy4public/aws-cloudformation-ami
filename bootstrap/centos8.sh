@@ -378,7 +378,8 @@ chmod 0644 "$BOOTSTRAP_MNT"/etc/systemd/system/systemd-resolved-wait-online.serv
 # SYSLINUX is true to the "Unix way" :)
 cat << __EOF__ > "$BOOTSTRAP_MNT"/boot/extlinux/extlinux.conf
 DEFAULT CentOS
-SAY ExtLinux Bootloader loading ...
+DIR /
+DIR /boot
 LABEL CentOS
   LINUX /boot/vmlinuz
   INITRD /boot/initrd.img
@@ -389,6 +390,8 @@ chroot "$BOOTSTRAP_MNT" extlinux --install /boot/extlinux
 # XXX: temporary hack
 ln -sf vmlinuz-4.18.0-193.28.1.el8_2.x86_64 "$BOOTSTRAP_MNT"/boot/vmlinuz
 ln -sf initramfs-4.18.0-193.28.1.el8_2.x86_64.img "$BOOTSTRAP_MNT"/boot/initrd.img
+ls -la "$BOOTSTRAP_MNT"/boot/
+chroot "$BOOTSTRAP_MNT" rpm -qa 'kernel*'
 
 cat << __EOF__ > "$BOOTSTRAP_MNT"/etc/modprobe.d/blacklist.conf
 # The following list of blacklisted modules ensures that irrelevant to AWS EC2
