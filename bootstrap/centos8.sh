@@ -150,10 +150,11 @@ BOOT_DIR_ABS="$3"
 KERNEL_IMAGE="$4"
 
 INITRD="initramfs-$KERNEL_VERSION.img"
+KERNEL="vmlinuz-$KERNEL_VERSION"
 
 if [ "$COMMAND" == 'add' ]; then
 	ln -sf "$INITRD" /boot/initrd.img
-	ln -sf "$KERNEL_IMAGE" /boot/
+	ln -sf "$KERNEL" /boot/vmlinuz
 fi
 __EOF__
 chmod 0700 "$BOOTSTRAP_MNT"/etc/kernel/install.d/10-ec2-kernel.sh
@@ -454,14 +455,14 @@ done
 > "$BOOTSTRAP_MNT"/etc/machine-id
 chmod 0644 "$BOOTSTRAP_MNT"/etc/machine-id
 rm -f "$BOOTSTRAP_MNT"/boot/initramfs-*.img
-chroot "$BOOTSTRAP_MNT" /bin/sh -ec '\
+chroot "$BOOTSTRAP_MNT" /bin/sh -exu -c '\
 	export LANG=C LC_ALL=C ;
-	INITRAMFS=$(rpm -ql kernel | grep ^/boot/initramfs- | sort -nr | head -1); \
+	INITRAMFS=$(rpm -ql kernel-core | grep ^/boot/initramfs- | sort -nr | head -1); \
 	KVERS=$(printf "$INITRAMFS" | sed -n "s,^/boot/initramfs-\(.*\)\.img,\1,;T;p"); \
 	[ -n "$INITRAMFS" -a -n "$KVERS" ] && \
 	dracut --strip --prelink --hardlink --ro-mnt --stdlog 3 --no-hostonly --drivers "xen-blkfront nvme ext4 mbcache jbd2" --force --verbose --show-modules --printsize "$INITRAMFS" "$KVERS" \
 '
-chroot "$BOOTSTRAP_MNT" /bin/bash -excu -c "
+chroot "$BOOTSTRAP_MNT" /bin/bash -exu -c "
 	systemctl mask proc-sys-fs-binfmt_misc.{auto,}mount systemd-binfmt.service --no-reload
 	systemctl enable systemd-networkd-wait-online.service --no-reload
 	ln -s /usr/lib/systemd/system/systemd-resolved.service /etc/systemd/system/network-online.target.wants/
