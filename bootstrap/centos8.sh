@@ -460,7 +460,7 @@ chroot "$BOOTSTRAP_MNT" /bin/sh -exu -c '\
 	INITRAMFS=$(rpm -ql kernel-core | grep ^/boot/initramfs- | sort -nr | head -1); \
 	KVERS=$(printf "$INITRAMFS" | sed -n "s,^/boot/initramfs-\(.*\)\.img,\1,;T;p"); \
 	[ -n "$INITRAMFS" -a -n "$KVERS" ] && \
-	dracut --strip --prelink --hardlink --ro-mnt --stdlog 3 --no-hostonly --drivers "xen-blkfront nvme ext4 mbcache jbd2" --force --verbose --show-modules --printsize "$INITRAMFS" "$KVERS" \
+	dracut --strip --hardlink --ro-mnt --stdlog 3 --no-hostonly --drivers "xen-blkfront nvme ext4 mbcache jbd2" --force --verbose --show-modules --printsize "$INITRAMFS" "$KVERS" \
 '
 chroot "$BOOTSTRAP_MNT" /bin/bash -exu -c "
 	systemctl mask proc-sys-fs-binfmt_misc.{auto,}mount systemd-binfmt.service --no-reload
