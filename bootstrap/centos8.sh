@@ -401,14 +401,15 @@ chmod 0644 "$BOOTSTRAP_MNT"/etc/systemd/system/systemd-resolved-wait-online.serv
 # Screw GRUB2!  Lately it became an overbloated piece of something that can't
 # even reliably install itself on a bootable ext4 block device.
 # SYSLINUX is true to the "Unix way" :)
-chroot "$BOOTSTRAP_MNT" extlinux --install /boot/extlinux
 cat << __EOF__ > "$BOOTSTRAP_MNT"/boot/extlinux/extlinux.conf
 DEFAULT CentOS
+SAY ExtLinux Bootloader loading ...
 LABEL CentOS
   LINUX /boot/vmlinuz
   INITRD /boot/initrd.img
   APPEND root=$DEVICE_ID ro crashkernel=auto console=tty0 console=ttyS0 modprobe.blacklist=i2c_piix4 nousb audit=1 quiet
 __EOF__
+chroot "$BOOTSTRAP_MNT" extlinux --install --stupid /boot/extlinux
 
 cat << __EOF__ > "$BOOTSTRAP_MNT"/etc/modprobe.d/blacklist.conf
 # The following list of blacklisted modules ensures that irrelevant to AWS EC2
