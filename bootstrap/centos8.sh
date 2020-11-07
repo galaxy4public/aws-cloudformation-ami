@@ -394,12 +394,7 @@ LABEL CentOS
   APPEND root=$DEVICE_ID ro crashkernel=auto console=tty0 console=ttyS0 modprobe.blacklist=i2c_piix4 nousb audit=1 quiet
 __EOF__
 chroot "$BOOTSTRAP_MNT" extlinux --install /boot/extlinux
-
-# XXX: temporary hack
-ln -sf vmlinuz-4.18.0-193.28.1.el8_2.x86_64 "$BOOTSTRAP_MNT"/boot/vmlinuz
-ln -sf initramfs-4.18.0-193.28.1.el8_2.x86_64.img "$BOOTSTRAP_MNT"/boot/initrd.img
-ls -la "$BOOTSTRAP_MNT"/boot/
-chroot "$BOOTSTRAP_MNT" rpm -qa 'kernel*'
+ls -la "$BOOTSTRAP_MNT"/boot
 
 cat << __EOF__ > "$BOOTSTRAP_MNT"/etc/modprobe.d/blacklist.conf
 # The following list of blacklisted modules ensures that irrelevant to AWS EC2
