@@ -484,7 +484,7 @@ printf '%%user_u\n' >> "$BOOTSTRAP_MNT"/etc/security/sepermit.conf
 printf 'handle-unknown=deny\n' >> "$BOOTSTRAP_MNT"/etc/selinux/semanage.conf
 
 # Configure SELinux policy
-chroot "$BOOTSTRAP_MNT" /bin/sh -ec "\
+chroot "$BOOTSTRAP_MNT" /bin/sh -exu -c "\
 	export LANG=C LC_ALL=C ;
 	semanage fcontext -N -a -e /tmp-inst /tmp/.private ;
 	semanage fcontext -N -a -e /var/tmp-inst /var/tmp/.private ;
@@ -497,7 +497,7 @@ chroot "$BOOTSTRAP_MNT" /bin/sh -ec "\
 
 	semanage login -a -s root -r 's0-s0:c0.c1023' %root -N ;
 	semanage login -m -s user_u -r s0 __default__ -N ;
-	semanage login -a -s user_u -r s0 root -N
+	semanage login -m -s user_u -r s0 root -N
 "
 
 # Ensure that we have sane i18n environment unless explicitly changed
