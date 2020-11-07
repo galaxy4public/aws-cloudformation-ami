@@ -86,8 +86,8 @@ mkfs -F -t ext4 -E lazy_itable_init=0,lazy_journal_init=0 -M / -q \
 
 # We are using tune2fs and sed here so we do not introduce additional
 # dependencies on blkid and grep for no particular reason
-FS_UUID=$(tune2fs -l "${TARGET_VOL}${P:-}1"
-	| sed -n 's,^\s*Filesystem\s\+UUID:\s*\([a-f0-9-]\+\),\1,;T;p'
+FS_UUID=$(tune2fs -l "${TARGET_VOL}${P:-}1" \
+	| sed -n 's,^\s*Filesystem\s\+UUID:\s*\([a-f0-9-]\+\),\1,;T;p' \
 	| tail -1 \
 )
 

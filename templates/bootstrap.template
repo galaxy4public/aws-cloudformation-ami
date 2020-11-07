@@ -411,7 +411,7 @@ Resources:
               return cfnresponse.send(event, context, cfnresponse.FAILED, { Error: '{}'.format(e) })
             return cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
       Handler: index.handler
-      Runtime: python3.8
+      Runtime: python3.7  # ZipFile is not supported with python3.8 as of 2020-11-07
       Timeout: 30
       Role: !GetAtt
         - LER
