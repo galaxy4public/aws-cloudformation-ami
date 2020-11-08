@@ -392,30 +392,40 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group/aws/lambda/${AWS::StackName}-ExtractAmiId-*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-ExtractAmiId-*'
+
   ExtractAmiId:
     Type: AWS::Lambda::Function
     Properties:
       Code:
         ZipFile: !Sub |
           import cfnresponse
+          import json
 
           def handler(event, context):
-            print("Received request:\n", json.dumps(event))
-            if event["RequestType"] == 'Delete':
-              return cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
             try:
-              import json
-              reponseData = json.loads(event["ResourceProperties"]["JSON"])
-            except Exception as e:
-              return cfnresponse.send(event, context, cfnresponse.FAILED, { Error: '{}'.format(e) })
+              print("Received request:\n", json.dumps(event))
+              if event["RequestType"] == 'Create':
+                responseData = json.loads(event["ResourceProperties"]["JSON"])
             return cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+            except Exception as e:
+              print('ERROR: encountered an exception: {}'.format(e))
+              return cfnresponse.send(event, context, cfnresponse.FAILED, { 'Error': '{}'.format(e) })
+            return cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
       Handler: index.handler
       Runtime: python3.7  # ZipFile is not supported with python3.8 as of 2020-11-07
       Timeout: 30
       Role: !GetAtt
         - LER
         - Arn
+
+  ExtractAmiLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ExtractAmiId}
+      RetentionInDays: 1
+
   AmiLambda:
     Type: Custom::Ami
     DependsOn:
