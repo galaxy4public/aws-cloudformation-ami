@@ -389,7 +389,7 @@ DEFAULT boot
 LABEL boot
   LINUX /boot/vmlinuz
   INITRD /boot/initrd.img
-  APPEND root=${DEVICE_ID//\"} ro crashkernel=auto console=tty0 console=ttyS0 modprobe.blacklist=i2c_piix4 nousb audit=1 enforcing=0 quiet
+  APPEND root=${DEVICE_ID//\"} ro crashkernel=auto console=tty0 console=ttyS0 modprobe.blacklist=i2c_piix4 nousb audit=1 quiet
 __EOF__
 chroot "$BOOTSTRAP_MNT" extlinux --install /boot/extlinux
 ls -la "$BOOTSTRAP_MNT"/boot
@@ -471,6 +471,7 @@ chroot "$BOOTSTRAP_MNT" /bin/sh -exu -c "\
 	semanage boolean -N --modify --on  deny_execmem ;
 	semanage boolean -N --modify --off selinuxuser_execmod ;
 	semanage boolean -N --modify --off selinuxuser_execstack ;
+	semanage boolean -N --modify --on  ssh_sysadm_login ;
 
 	semanage login -a -s root -r 's0-s0:c0.c1023' %root -N ;
 	semanage login -m -s user_u -r s0 __default__ -N ;
@@ -525,7 +526,7 @@ rm -f /etc/ssh/ssh_host_*_key*
 rm -rf /root/.ssh
 rm -rf /var/cache/dnf/*
 
-for f in btmp dmesg lastlog tallylog wtmp dnf.log dnf.librepo.log dnf.rpm.log  ; do [ -s "/var/log/$f" ] && >"/var/log/$f" ; done
+for f in btmp dmesg lastlog tallylog wtmp dnf.log dnf.librepo.log dnf.rpm.log hawkey.log ; do [ -s "/var/log/$f" ] && >"/var/log/$f" ; done
 rm -rf /var/log/journal/*
 
 >/etc/machine-id
@@ -540,6 +541,11 @@ ln -sf /usr/lib/systemd/system/multi-user.target /etc/systemd/system/default.tar
 
 # remove our cleanup target
 rm /etc/systemd/system/template-cleanup.target
+
+# re-label SYSLINUX stage2 loader
+chattr -i /boot/extlinux/ldlinux.sys
+restorecon -Rv /
+chattr +i /boot/extlinux/ldlinux.sys
 
 # Power off the instance, so imaging could take place
 poweroff --no-wtmp --no-wall
