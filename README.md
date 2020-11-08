@@ -11,7 +11,7 @@ template could be used to specify the image ID for resources that require
 such an ID.
 
 The primary focus was to create a CentOS 7 minimal installation AMI with
-additional security tightening applied.  However, since then the template
+additional security hardening applied.  However, since then the template
 was enhanced to handle additional OSes via separate bootstrap scripts.
 
 Currently, the following OSes are supported:
@@ -34,6 +34,15 @@ aws cloudformation create-stack --stack-name <name> \
 	--parameters ParameterKey=SubnetId,ParameterValue=<subnet_id> \
 		[ParameterKey=<parameter>,ParameterValue=<value>]
 ```
+
+Once the execution of the CloudFormation template finishes you will be
+able to instantiate new EC2 instances using the created AMI.
+
+**NOTE**: The default user account for the images is **r_admin** and it is a
+confined user with the default role of __staff_r__ (this role allows you
+observe stuff, but not modify).  If you want to administer the instance you
+will need to login with the __sysadm_r__ role (e.g. use `ssh
+r_admin/sysadm_r@<ip_address_of_your_instance>`).
 
 Stack parameters
 ----------------
