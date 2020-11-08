@@ -385,13 +385,11 @@ chmod 0644 "$BOOTSTRAP_MNT"/etc/systemd/system/systemd-resolved-wait-online.serv
 # even reliably install itself on a bootable ext4 block device.
 # SYSLINUX is true to the "Unix way" :)
 cat << __EOF__ > "$BOOTSTRAP_MNT"/boot/extlinux/extlinux.conf
-DEFAULT CentOS
-DIR /
-DIR /boot
-LABEL CentOS
+DEFAULT boot
+LABEL boot
   LINUX /boot/vmlinuz
   INITRD /boot/initrd.img
-  APPEND root=$DEVICE_ID ro crashkernel=auto console=tty0 console=ttyS0 modprobe.blacklist=i2c_piix4 nousb audit=1 quiet
+  APPEND root=${DEVICE_ID//\"} ro crashkernel=auto console=tty0 console=ttyS0 modprobe.blacklist=i2c_piix4 nousb audit=1 enforcing=0 quiet
 __EOF__
 chroot "$BOOTSTRAP_MNT" extlinux --install /boot/extlinux
 ls -la "$BOOTSTRAP_MNT"/boot
