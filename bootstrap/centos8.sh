@@ -1253,7 +1253,7 @@ done
 # Register an image
 if ! AMI_ID=$(aws ec2 register-image --output json \
 		--name "build-image-$(date +%Y%m%d%H%M%S)-$(tr -dc '[:alnum:]' < /dev/urandom | head -c8)" \
-			--description 'A minimal CentOS 7 image' \
+			--description 'A minimal CentOS 8 image' \
 			--architecture x86_64 --virtualization-type hvm --sriov-net-support simple --ena-support \
 			--root-device-name /dev/xvda --block-device-mappings \
 				"DeviceName=/dev/xvda,Ebs={SnapshotId=$SNAPSHOT_ID,DeleteOnTermination=true}" \
