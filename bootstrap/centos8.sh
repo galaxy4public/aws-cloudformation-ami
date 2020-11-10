@@ -183,7 +183,8 @@ pkgmanager()
 }
 
 pkgmanager install \
-	basesystem kernel syslinux-extlinux dracut e2fsprogs dnf \
+	basesystem kernel syslinux-extlinux dracut e2fsprogs \
+	dnf python3-dnf-plugin-post-transaction-actions \
 	attr patch \
 	openssh-server selinux-policy-targeted \
 	less vim-minimal policycoreutils-python-utils audit \
@@ -547,6 +548,11 @@ chattr -i /boot/extlinux/ldlinux.sys
 restorecon -Rv /
 chattr +i /boot/extlinux/ldlinux.sys
 
+# clean up the /boot directory from machineid folders
+ls -1 /boot/ \
+	| grep -vE '^(extlinux|initr.*\.img|vmlinu.*)' \
+	| xargs -i rm -rf -- '/boot/{}'
+
 # Power off the instance, so imaging could take place
 poweroff --no-wtmp --no-wall
 __EOF__
@@ -741,26 +747,22 @@ chmod 0644 "$BOOTSTRAP_MNT"/etc/security/namespace.d/tmp.conf
 
 cat > "$BOOTSTRAP_MNT"/etc/sysctl.d/10-security.conf << "__EOF__"
 # We are running a pure x86_64 system and don't need 32-bit support
-abi.syscall32 = 0
+abi.vsyscall32 = 0
 
 # Ensure that SUID binaries are not dumpable (default on CentOS 8)
-#fs.suid_dumpable = 0
+fs.suid_dumpable = 0
 
 # Openwall-derived protection patches that ensure that the links can be
 # created only if the creator has access to the target (default on CentOS 8)
-#fs.protected_hardlinks = 1
-#fs.protected_symlinks = 1
-
-# Disable custom binaries support (sysctl currently cannot set this)
-##fs.binfmt_misc.status = 0
+fs.protected_hardlinks = 1
+fs.protected_symlinks = 1
 
 # Disable kernel stack tracer (default on CentOS 8)
-#kernel.stack_tracer_enabled = 0
+kernel.stack_tracer_enabled = 0
 
 # Employ ASLR (address space layout randomisation) memory techniques
-#kernel.randomize_va_space = 2
+kernel.randomize_va_space = 2
 
-#
 # This toggle indicates whether restrictions are placed on exposing kernel
 # addresses via /proc and other interfaces.
 # When kptr_restrict is set to (0), the default, there are no restrictions.
@@ -781,6 +783,15 @@ kernel.ftrace_enabled = 0
 # When dmesg_restrict is set to (0), there are no restrictions.
 # When dmesg_restrict is set to (1), users must have CAP_SYSLOG to use dmesg(8).
 kernel.dmesg_restrict = 1
+
+# Restrict usage of ptrace to descendant processes
+kernel.yama.ptrace_scope = 1
+
+# Disable Access to Network bpf() Syscall From Unprivileged Processes (default on CentOS 8)
+kernel.unprivileged_bpf_disabled = 1
+
+# Harden the operation of the BPF just-in-time compiler
+net.core.bpf_jit_harden = 2
 __EOF__
 
 cat > "$BOOTSTRAP_MNT"/etc/sysctl.d/20-networking.conf << "__EOF__"
@@ -817,27 +828,22 @@ sed -i '
 sed -i '/^\s*#\s\+Accept\s\+locale-related/d;/^\s*AcceptEnv\s\+\(L\|XMODIFIERS\)/d' "$BOOTSTRAP_MNT"/etc/ssh/sshd_config
 
 # Download and install the extensive privileges check tool
-curl -qsS4f --retry 900 --retry-delay 1 'https://raw.githubusercontent.com/galaxy4public/check-sugid/master/check-sugid.script' -o "$BOOTSTRAP_MNT"/usr/local/sbin/check-sugid
-chmod 0700 "$BOOTSTRAP_MNT"/usr/local/sbin/check-sugid
+pkgmanager install 'https://github.com/galaxy4public/check-sugid/releases/download/0.0.2/check-sugid-0.0.2-1.noarch.rpm'
 
 # Install the default policy for check-sugid
-#curl -qsS4f --retry 900 --retry-delay 1 'https://raw.githubusercontent.com/galaxy4public/check-sugid/master/policies/centos8' -o "$BOOTSTRAP_MNT"/etc/yum/post-actions/check-sugid.action
-#chmod 0600 "$BOOTSTRAP_MNT"/etc/yum/post-actions/check-sugid.action
+curl -qsS4f --retry 900 --retry-delay 1 'https://raw.githubusercontent.com/galaxy4public/check-sugid/master/policies/centos8' -o "$BOOTSTRAP_MNT"/etc/dnf/plugins/post-transaction-actions.d/check-sugid.action
+chmod 0600 "$BOOTSTRAP_MNT"/etc/dnf/plugins/post-transaction-actions.d/check-sugid.action
 
-# link check-sugid into yum
-#curl -qsS4f --retry 900 --retry-delay 1 'https://raw.githubusercontent.com/galaxy4public/yum-plugin-at-exit/master/yum-plugin-at-exit.conf' -o "$BOOTSTRAP_MNT"/etc/yum/pluginconf.d/at-exit.conf
-#chmod 0644 "$BOOTSTRAP_MNT"/etc/yum/pluginconf.d/at-exit.conf
-#mkdir -m755 "$BOOTSTRAP_MNT"/etc/yum/pluginconf.d/at-exit.conf.d
-#ln -s /usr/local/sbin/check-sugid "$BOOTSTRAP_MNT"/etc/yum/pluginconf.d/at-exit.conf.d/
-
-#curl -qsS4f --retry 900 --retry-delay 1 'https://raw.githubusercontent.com/galaxy4public/yum-plugin-at-exit/master/yum-plugin-at-exit.helper' -o "$BOOTSTRAP_MNT"/usr/lib/yum-plugins/at-exit.helper
-#chmod 0755 "$BOOTSTRAP_MNT"/usr/lib/yum-plugins/at-exit.helper
-
-#curl -qsS4f --retry 900 --retry-delay 1 'https://raw.githubusercontent.com/galaxy4public/yum-plugin-at-exit/master/yum-plugin-at-exit.py' -o "$BOOTSTRAP_MNT"/usr/lib/yum-plugins/at-exit.py
-#chmod 0644 "$BOOTSTRAP_MNT"/usr/lib/yum-plugins/at-exit.py
+# link check-sugid into dnf
+cat << "__EOF__" >> "$BOOTSTRAP_MNT"/etc/dnf/plugins/post-transaction-actions.d/check-sugid.action
+# ===========================================================================
+# This should be the last line of this file to ensure that the check runs
+# after all tweaks are done.
+*:in:echo 'executing check-sugid scan ...' ; /usr/local/sbin/check-sugid $state
+__EOF__
 
 # Apply the check-sugid policies
-#chroot "$BOOTSTRAP_MNT" /bin/sh -c "grep ':update:' /etc/yum/post-actions/check-sugid.action | grep -vE '^\s*#' | cut -f3- -d':' | sh -x" ||:
+chroot "$BOOTSTRAP_MNT" /bin/sh -c "grep ':in:' /etc/dnf/plugins/post-transaction-actions.d/check-sugid.action | grep -vE '^\s*(#|\*:)' | cut -f3- -d':' | sh -x" ||:
 
 cat << "__EOF__" > "$BOOTSTRAP_MNT"/usr/local/sbin/apply-etc-patches.sh
 #!/bin/sh -e
@@ -873,61 +879,74 @@ __EOF__
 chmod 0700 "$BOOTSTRAP_MNT"/usr/local/sbin/apply-etc-patches.sh
 
 mkdir -m700 "$BOOTSTRAP_MNT"/etc/patches
-if false; then
+
 cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/patches/bashrc.diff
---- etc/bashrc.centos	2016-11-05 17:19:35.000000000 +0000
-+++ etc/bashrc	2017-03-20 02:59:33.608000000 +0000
-@@ -68,9 +68,9 @@
+--- etc/bashrc.centos	2020-04-06 23:31:18.000000000 +0000
++++ etc/bashrc	2020-11-10 12:16:36.664000000 +0000
+@@ -71,9 +71,8 @@ if [ -z "$BASHRCSOURCED" ]; then
+     # Current threshold for system reserved uid/gids is 200
      # You could check uidgid reservation validity in
      # /usr/share/doc/setup-*/uidgid file
++    umask 077
      if [ $UID -gt 199 ] && [ "`/usr/bin/id -gn`" = "`/usr/bin/id -un`" ]; then
 -       umask 002
 -    else
         umask 022
-+    else
-+       umask 077
      fi
  
-     SHELL=/bin/bash
 __EOF__
 
 cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/patches/csh.cshrc.diff
---- etc/csh.cshrc.centos	2016-11-05 17:19:35.000000000 +0000
-+++ etc/csh.cshrc	2017-03-20 03:00:28.804000000 +0000
-@@ -8,9 +8,9 @@
+--- etc/bashrc.centos	2020-04-06 23:31:18.000000000 +0000
++++ etc/bashrc	2020-11-10 12:16:36.664000000 +0000
+@@ -71,9 +71,8 @@ if [ -z "$BASHRCSOURCED" ]; then
+     # Current threshold for system reserved uid/gids is 200
+     # You could check uidgid reservation validity in
+     # /usr/share/doc/setup-*/uidgid file
++    umask 077
+     if [ $UID -gt 199 ] && [ "`/usr/bin/id -gn`" = "`/usr/bin/id -un`" ]; then
+-       umask 002
+-    else
+        umask 022
+     fi
+
+[root@ip-10-0-12-242 patches]# vim !$
+vim bashrc.diff
+[root@ip-10-0-12-242 patches]# cat csh.cshrc.diff
+--- etc/csh.cshrc.centos	2020-04-06 23:31:18.000000000 +0000
++++ etc/csh.cshrc	2020-11-10 12:16:53.005000000 +0000
+@@ -7,9 +7,8 @@
+ # Current threshold for system reserved uid/gids is 200
  # You could check uidgid reservation validity in
  # /usr/share/doc/setup-*/uidgid file
++umask 077
  if ($uid > 199 && "`/usr/bin/id -gn`" == "`/usr/bin/id -un`") then
 -    umask 002
 -else
      umask 022
-+else
-+    umask 077
  endif
  
- if ($?prompt) then
 __EOF__
 
 cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/patches/profile.diff
---- etc/profile.centos	2016-11-05 17:19:35.000000000 +0000
-+++ etc/profile	2017-03-20 03:01:31.243000000 +0000
-@@ -57,9 +57,9 @@
+--- etc/profile.centos	2020-04-06 23:31:18.000000000 +0000
++++ etc/profile	2020-11-10 12:17:15.502000000 +0000
+@@ -56,9 +56,8 @@ export PATH USER LOGNAME MAIL HOSTNAME H
+ # Current threshold for system reserved uid/gids is 200
  # You could check uidgid reservation validity in
  # /usr/share/doc/setup-*/uidgid file
++umask 077
  if [ $UID -gt 199 ] && [ "`/usr/bin/id -gn`" = "`/usr/bin/id -un`" ]; then
 -    umask 002
 -else
      umask 022
-+else
-+    umask 077
  fi
  
- for i in /etc/profile.d/*.sh ; do
 __EOF__
 
 cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/patches/functions.diff
---- etc/rc.d/init.d/functions.centos	2015-09-16 11:51:07.000000000 +0000
-+++ etc/rc.d/init.d/functions	2016-04-03 11:34:40.901000000 +0000
+--- etc/init.d/functions.centos	2019-12-10 11:29:30.000000000 +0000
++++ etc/init.d/functions	2020-11-10 12:19:27.832000000 +0000
 @@ -7,7 +7,7 @@
  TEXTDOMAIN=initscripts
 
@@ -941,29 +960,25 @@ __EOF__
 
 chmod 0600 "$BOOTSTRAP_MNT"/etc/patches/*.diff
 
-cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/yum/post-actions/umask.action
-# This yum post-transaction action updates the default umask in /etc
+cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/dnf/plugins/post-transaction-actions.d/umask.action
+# This dnf post-transaction action updates the default umask in /etc
 # to be stricter than the default provided by FC/RHEL/CentOS.
 
-# install transaction state is used to cover 'yum reinstall <package>'
-
-setup:install:/usr/local/sbin/apply-etc-patches.sh {bashrc,csh.cshrc,profile}.diff
-setup:update:/usr/local/sbin/apply-etc-patches.sh {bashrc,csh.cshrc,profile}.diff
-initscripts:install:/usr/local/sbin/apply-etc-patches.sh functions.diff
-initscripts:update:/usr/local/sbin/apply-etc-patches.sh functions.diff
+setup:in:/usr/local/sbin/apply-etc-patches.sh {bashrc,csh.cshrc,profile}.diff
+initscripts:in:/usr/local/sbin/apply-etc-patches.sh functions.diff
 __EOF__
 
 chroot "$BOOTSTRAP_MNT" /bin/sh /usr/local/sbin/apply-etc-patches.sh
-fi
 
 # SELinux customisations
 mkdir -m700 "$BOOTSTRAP_MNT"/root/policies
-cat << "__EOF__" > "$BOOTSTRAP_MNT"/root/policies/initd2user.te
+
+cat << "__EOF__" > "$BOOTSTRAP_MNT"/root/policies/custom_init.te
 # This module allows the init_t to user_t transitions, so one would be able
 # to define systemd or SysVinit services that drop user privileges to a
 # bare minimum (e.g. drop privileges using DAC followed by confinement in
 # the non-privileged SELinux domain.
-module initd2user 1.0;
+module custom_init 1.0;
 
 require {
 	type init_t;
@@ -975,8 +990,12 @@ require {
 allow init_t unpriv_userdomain:process transition;
 __EOF__
 
-cat << "__EOF__" > "$BOOTSTRAP_MNT"/root/policies/no_kernel_load_modules.te
-module no_kernel_load_modules 1.0;
+cat << "__EOF__" > "$BOOTSTRAP_MNT"/root/policies/custom_kernel.te
+# This module suppresses AVC messages when something tried to load
+# a kernel module.  It should have been unneeded if everything was
+# perfect, but it seems every developer want to bring "the best
+# user experience" and apps are trying to load modules on demand.
+module custom_kernel 1.0;
 
 require {
 	type kernel_t;
@@ -987,9 +1006,9 @@ require {
 dontaudit daemon kernel_t:system module_request;
 __EOF__
 
-cat << "__EOF__" > "$BOOTSTRAP_MNT"/root/policies/systemd_resolved.te
+cat << "__EOF__" > "$BOOTSTRAP_MNT"/root/policies/custom_systemd_resolved.te
 # Allow daemons to communicate with resolved over the DBUS interface
-module systemd_resolved 1.0;
+module custom_systemd_resolved 1.0;
 
 require {
 	type systemd_resolved_t;
@@ -1001,6 +1020,39 @@ require {
 allow daemon systemd_resolved_t:dbus send_msg;
 allow systemd_resolved_t daemon:dbus send_msg;
 allow systemd_resolved_t dbusd_unconfined:dbus send_msg;
+__EOF__
+
+cat << "__EOF__" > "$BOOTSTRAP_MNT"/root/policies/custom_journalctl.te
+# Suppresses AVC produced by journalctl when it is trying to read files
+# in restricted directories or runs out of resources.
+module custom_journalctl 1.0;
+
+require {
+	type journalctl_t;
+	class process setrlimit;
+	class capability { dac_override dac_read_search sys_resource };
+}
+
+#============= journalctl_t ==============
+dontaudit journalctl_t self:capability { dac_override dac_read_search sys_resource };
+dontaudit journalctl_t self:process setrlimit;
+__EOF__
+
+cat << "__EOF__" > "$BOOTSTRAP_MNT"/root/policies/custom_user.te
+# Suppresses AVC produced by processes running in the confined
+# non-privileged domain where processes are trying to get some
+# capabilities (the user_t domain is completely non-privileged
+# and no capabilities should be ever given)
+module custom_user 1.0;
+
+require {
+	type user_t;
+	class capability { sys_admin sys_resource };
+}
+
+# user_t is a confined domain that is not suposed to have any capabilities
+#============= user_t ==============
+dontaudit user_t self:capability { sys_admin sys_resource };
 __EOF__
 
 chmod 0600 "$BOOTSTRAP_MNT"/root/policies/*.te
