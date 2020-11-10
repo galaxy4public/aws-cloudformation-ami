@@ -245,6 +245,10 @@ done
 cat /etc/resolv.conf > "$BOOTSTRAP_MNT"/etc/resolv.conf
 chroot "$BOOTSTRAP_MNT" dnf -y install epel-release
 chroot "$BOOTSTRAP_MNT" dnf -y install systemd-networkd
+
+# Download and install the extensive privileges check tool
+chroot "$BOOTSTRAP_MNT" dnf -y install 'https://github.com/galaxy4public/check-sugid/releases/download/0.0.2/check-sugid-0.0.2-1.noarch.rpm'
+
 rm "$BOOTSTRAP_MNT"/etc/resolv.conf
 
 SCRIPT_CHECKSUM=$(sha256sum "${BASH_SOURCE[0]}" | cut -f1 -d' ')
@@ -831,9 +835,6 @@ sed -i '
 # Remove all locale and X Window related environment since the only
 # locale we have is C and we do not expect running X Window
 sed -i '/^\s*#\s\+Accept\s\+locale-related/d;/^\s*AcceptEnv\s\+\(L\|XMODIFIERS\)/d' "$BOOTSTRAP_MNT"/etc/ssh/sshd_config
-
-# Download and install the extensive privileges check tool
-chroot "$BOOTSTRAP_MNT" dnf -y install 'https://github.com/galaxy4public/check-sugid/releases/download/0.0.2/check-sugid-0.0.2-1.noarch.rpm'
 
 # Install the default policy for check-sugid
 curl -qsS4f --retry 900 --retry-delay 1 'https://raw.githubusercontent.com/galaxy4public/check-sugid/master/policies/centos8' -o "$BOOTSTRAP_MNT"/etc/dnf/plugins/post-transaction-actions.d/check-sugid.action
