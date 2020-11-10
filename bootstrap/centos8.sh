@@ -845,7 +845,7 @@ cat << "__EOF__" >> "$BOOTSTRAP_MNT"/etc/dnf/plugins/post-transaction-actions.d/
 # ===========================================================================
 # This should be the last line of this file to ensure that the check runs
 # after all tweaks are done.
-*:in:echo 'executing check-sugid scan ...' ; /usr/local/sbin/check-sugid $state
+*:in:echo 'executing check-sugid scan ...' ; /usr/sbin/check-sugid $state
 __EOF__
 
 # Apply the check-sugid policies
