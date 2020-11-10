@@ -139,6 +139,52 @@ fi
 __EOF__
 chmod 0700 "$BOOTSTRAP_MNT"/etc/kernel/install.d/10-ec2-kernel.install
 
+# We need to define our list of modules we don't want _before_ we
+# install the kernel package, otherwise it will include stuff we
+# don't want.
+mkdir -p -m755 "$BOOTSTRAP_MNT"/etc/modprobe.d
+cat << __EOF__ > "$BOOTSTRAP_MNT"/etc/modprobe.d/blacklist.conf
+# The following list of blacklisted modules ensures that irrelevant to AWS EC2
+# instances subsystems are not loaded.  The install directives ensure that
+# even if a module is implicitly called by something else the actual loading
+# procedure will not be triggered.  Some modules are explicitly probed from
+# udev, so for these modules the install directive returns successful exit
+# code, otherwise log files will contain warnings.
+#
+__EOF__
+chmod 0600 "$BOOTSTRAP_MNT"/etc/modprobe.d/blacklist.conf
+
+for module in \
+	ata_generic:false \
+	ata_piix:false \
+	binfmt_misc:false \
+	cirrus:true \
+	drm:true \
+	drm_kms_helper:true \
+	floppy:false \
+	i2c_core:true \
+	i2c_piix4:false \
+	libata:false \
+	parport:false \
+	parport_pc:false \
+	pata_acpi:false \
+	pcspkr:false \
+	serio_raw:false \
+	snd:true \
+	snd_pcm:true \
+	snd_pcsp:true \
+	snd_timer:true \
+	soundcore:true \
+	ttm:true \
+	usbcore:false \
+	usbserial:false \
+; do
+	cat <<-__EOF__ >> "$BOOTSTRAP_MNT"/etc/modprobe.d/blacklist.conf
+		blacklist ${module%%:*}
+		install ${module%%:*} /bin/${module#*:}
+__EOF__
+done
+
 mkdir -p -m755 "$BOOTSTRAP_MNT"/etc/rpm
 cat > "$BOOTSTRAP_MNT"/etc/rpm/macros.local << "__EOF__"
 %_install_langs (none)
@@ -148,7 +194,7 @@ __EOF__
 chmod 0644 "$BOOTSTRAP_MNT"/etc/rpm/macros.local
 
 HOST_PMGR=dnf
-if ! which "$HOST_PMGR" >/dev/null 2>&1 ; then
+if ! type -p "$HOST_PMGR" >/dev/null 2>&1 ; then
 	HOST_PMGR=yum
 	if ! which "$HOST_PMGR" >/dev/null 2>&1 ; then
 		echo 'ERROR: could not find neither "yum" nor "dnf", cannot continue!'
@@ -393,49 +439,13 @@ LABEL boot
   APPEND root=${DEVICE_ID//\"} ro crashkernel=auto console=tty0 console=ttyS0 modprobe.blacklist=i2c_piix4 nousb audit=1 quiet
 __EOF__
 chroot "$BOOTSTRAP_MNT" extlinux --install /boot/extlinux
+
+# clean up the /boot directory from machineid folders
+ls -1 /boot/ \
+	| grep -vE '^(extlinux|initr.*\.img|vmlinu.*)' \
+	| xargs -i rm -rf -- '/boot/{}'
 ls -la "$BOOTSTRAP_MNT"/boot
 
-cat << __EOF__ > "$BOOTSTRAP_MNT"/etc/modprobe.d/blacklist.conf
-# The following list of blacklisted modules ensures that irrelevant to AWS EC2
-# instances subsystems are not loaded.  The install directives ensure that
-# even if a module is implicitly called by something else the actual loading
-# procedure will not be triggered.  Some modules are explicitly probed from
-# udev, so for these modules the install directive returns successful exit
-# code, otherwise log files will contain warnings.
-#
-__EOF__
-chmod 0600 "$BOOTSTRAP_MNT"/etc/modprobe.d/blacklist.conf
-
-for module in \
-	ata_generic:false \
-	ata_piix:false \
-	binfmt_misc:false \
-	cirrus:true \
-	drm:true \
-	drm_kms_helper:true \
-	floppy:false \
-	i2c_core:true \
-	i2c_piix4:false \
-	libata:false \
-	parport:false \
-	parport_pc:false \
-	pata_acpi:false \
-	pcspkr:false \
-	serio_raw:false \
-	snd:true \
-	snd_pcm:true \
-	snd_pcsp:true \
-	snd_timer:true \
-	soundcore:true \
-	ttm:true \
-	usbcore:false \
-	usbserial:false \
-; do
-	cat <<-__EOF__ >> "$BOOTSTRAP_MNT"/etc/modprobe.d/blacklist.conf
-		blacklist ${module%%:*}
-		install ${module%%:*} /bin/${module#*:}
-__EOF__
-done
 
 > "$BOOTSTRAP_MNT"/etc/machine-id
 chmod 0644 "$BOOTSTRAP_MNT"/etc/machine-id
@@ -489,7 +499,7 @@ chmod 0644 "$BOOTSTRAP_MNT"/etc/locale.conf
 # A nice touch for a initscript-less system :)
 cat << "__EOF__" > "$BOOTSTRAP_MNT"/etc/rc.d/init.d/functions
 # If you are looking inside this file, most likely you need to install
-# the initscripts package, e.g. "yum -y install initscripts"
+# the initscripts package, e.g. "dnf -y install initscripts"
 initscripts_required_error ()
 {
 	echo "Please install the initscripts package if this functionality is required!" >&2
@@ -547,11 +557,6 @@ rm /etc/systemd/system/template-cleanup.target
 chattr -i /boot/extlinux/ldlinux.sys
 restorecon -Rv /
 chattr +i /boot/extlinux/ldlinux.sys
-
-# clean up the /boot directory from machineid folders
-ls -1 /boot/ \
-	| grep -vE '^(extlinux|initr.*\.img|vmlinu.*)' \
-	| xargs -i rm -rf -- '/boot/{}'
 
 # Power off the instance, so imaging could take place
 poweroff --no-wtmp --no-wall
@@ -828,7 +833,7 @@ sed -i '
 sed -i '/^\s*#\s\+Accept\s\+locale-related/d;/^\s*AcceptEnv\s\+\(L\|XMODIFIERS\)/d' "$BOOTSTRAP_MNT"/etc/ssh/sshd_config
 
 # Download and install the extensive privileges check tool
-pkgmanager install 'https://github.com/galaxy4public/check-sugid/releases/download/0.0.2/check-sugid-0.0.2-1.noarch.rpm'
+chroot "$BOOTSTRAP_MNT" dnf -y install 'https://github.com/galaxy4public/check-sugid/releases/download/0.0.2/check-sugid-0.0.2-1.noarch.rpm'
 
 # Install the default policy for check-sugid
 curl -qsS4f --retry 900 --retry-delay 1 'https://raw.githubusercontent.com/galaxy4public/check-sugid/master/policies/centos8' -o "$BOOTSTRAP_MNT"/etc/dnf/plugins/post-transaction-actions.d/check-sugid.action
